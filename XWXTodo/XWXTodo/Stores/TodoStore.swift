@@ -19,13 +19,18 @@ final class TodoStore: ObservableObject {
     var activeTodos: [TodoItem] {
         todos
             .filter { $0.status != .completed }
-            .sorted { $0.sortOrder < $1.sortOrder }
+            .sorted {
+                if $0.sortOrder == $1.sortOrder {
+                    return $0.createdAt < $1.createdAt
+                }
+                return $0.sortOrder < $1.sortOrder
+            }
     }
 
     var completedTodos: [TodoItem] {
         todos
             .filter { $0.status == .completed }
-            .sorted { $0.sortOrder < $1.sortOrder }
+            .sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
     }
 
     var doingTodo: TodoItem? {
@@ -75,6 +80,7 @@ final class TodoStore: ObservableObject {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty else { return }
         guard var item = todos.first(where: { $0.id == id }) else { return }
+        guard item.status != .completed else { return }
 
         item.title = trimmedTitle
         item.updatedAt = now()
