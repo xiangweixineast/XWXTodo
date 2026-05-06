@@ -7,11 +7,29 @@
 
 import SwiftUI
 
+@MainActor
+final class AppState: ObservableObject {
+    let store: TodoStore?
+    @Published var startupError: String?
+
+    init() {
+        do {
+            let repository = try SQLiteTodoRepository()
+            self.store = try TodoStore(repository: repository)
+        } catch {
+            self.store = nil
+            self.startupError = error.localizedDescription
+        }
+    }
+}
+
 @main
 struct XWXTodoApp: App {
+    @StateObject private var appState = AppState()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(appState: appState)
         }
     }
 }
