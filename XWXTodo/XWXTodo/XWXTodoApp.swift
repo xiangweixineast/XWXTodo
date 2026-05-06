@@ -12,6 +12,11 @@ final class AppState: ObservableObject {
     let store: TodoStore?
     @Published var startupError: String?
 
+    init(store: TodoStore?, startupError: String? = nil) {
+        self.store = store
+        self.startupError = startupError
+    }
+
     init() {
         do {
             let repository = try SQLiteTodoRepository()

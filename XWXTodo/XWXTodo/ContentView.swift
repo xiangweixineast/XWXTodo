@@ -75,5 +75,5 @@ private struct CountLabel: View {
 }
 
 #Preview {
-    ContentView(appState: AppState())
+    ContentView(appState: AppState(store: nil))
 }
