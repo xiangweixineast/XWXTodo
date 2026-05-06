@@ -2,5 +2,8 @@
 .DS_Store
 DerivedData/
 .build/
+build/
+dist/
+*.xcarchive
 *.xcuserstate
 xcuserdata/
