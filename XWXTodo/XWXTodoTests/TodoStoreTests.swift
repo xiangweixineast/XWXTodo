@@ -100,6 +100,38 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertEqual(store.completedTodos[0].updatedAt, baseDate)
     }
 
+    func testStartTodoDoesNotStartCompletedItem() throws {
+        let id = UUID()
+        let completed = makeTodo(id: id, title: "Done", status: .completed, completedAt: baseDate)
+        let store = try TodoStore(repository: InMemoryTodoRepository(items: [completed]), now: { self.baseDate })
+
+        try store.startTodo(id: id)
+
+        XCTAssertEqual(store.completedTodos[0].status, .completed)
+        XCTAssertNil(store.doingTodo)
+        XCTAssertEqual(store.notchTitle, "XWXTodo")
+    }
+
+    func testCompleteTodoDoesNotMutateCompletedItem() throws {
+        let id = UUID()
+        let completed = makeTodo(
+            id: id,
+            title: "Done",
+            status: .completed,
+            updatedAt: baseDate,
+            completedAt: baseDate
+        )
+        let store = try TodoStore(
+            repository: InMemoryTodoRepository(items: [completed]),
+            now: { self.baseDate.addingTimeInterval(10) }
+        )
+
+        try store.completeTodo(id: id)
+
+        XCTAssertEqual(store.completedTodos[0].completedAt, baseDate)
+        XCTAssertEqual(store.completedTodos[0].updatedAt, baseDate)
+    }
+
     private func makeTodo(
         id: UUID = UUID(),
         title: String,
