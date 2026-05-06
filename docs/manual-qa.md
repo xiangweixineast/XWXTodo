@@ -18,6 +18,21 @@
 - 全屏 App 测试结果：通过。Finder 全屏 Space 中覆盖层仍 `onscreen=1`，收起态位于 `X=820, Y=0, Width=280, Height=34`，展开态位于 `X=730, Y=0, Width=460, Height=360`。
 - 层级选择说明：当前选择 `screenSaverWindow`，因为覆盖层需要贴物理屏幕顶边并覆盖全屏 Space。该层级偏强，风险是覆盖系统或 App 顶部内容；当前通过小尺寸收起态、固定宽高展开态和鼠标离开自动收起来控制遮挡范围。暂不降级到 `.statusBar`、`.popUpMenu` 或 `.modalPanel`。
 
+## 最终验收记录
+
+| 项目 | 结果 | 记录 |
+| --- | --- | --- |
+| 完整测试 | 通过 | `xcodebuild test -project XWXTodo/XWXTodo.xcodeproj -scheme XWXTodo -destination 'platform=macOS'` 返回 `** TEST SUCCEEDED **`，共 17 个测试、0 个失败。 |
+| Debug 构建 | 通过 | `xcodebuild build -project XWXTodo/XWXTodo.xcodeproj -scheme XWXTodo -configuration Debug` 返回 `** BUILD SUCCEEDED **`。 |
+| Release 打包 | 通过 | `./scripts/package.sh` 返回 `** BUILD SUCCEEDED **` 并生成 `dist/XWXTodo.zip`；生成时间 `2026-05-07 01:17:16 +0800`，SHA256 `5ff84df17af36da0331f2eb304263894657247ee305276cbb1c2342936df31f2`；包内包含 `_CodeSignature/CodeResources`，未发现 `._` AppleDouble 条目。 |
+| Zip 解压启动 | 通过 | 从上述 `dist/XWXTodo.zip` 解压到 `/tmp/XWXTodo-qa` 后，`codesign --verify --deep --strict` 通过；启动进程路径为 `/tmp/XWXTodo-qa/XWXTodo.app/Contents/MacOS/XWXTodo`。 |
+| 通用架构 | 通过 | 解压后的可执行文件为 `x86_64` 和 `arm64` 双架构 Mach-O。 |
+| 顶部覆盖层 | 通过 | 解压产物启动后，系统窗口列表显示 XWXTodo 覆盖层 `layer=1000`、`onscreen=1`、`X=820, Y=0, Width=280, Height=34`。 |
+| 首次启动创建数据库 | 通过 | 退出 App 并完整备份现有 `/Users/xwx/Library/Application Support/XWXTodo` 后，临时移走该目录并启动 `/tmp/XWXTodo-qa/XWXTodo.app`；执行 `test -f "$HOME/Library/Application Support/XWXTodo/xwxtodo.sqlite"` 后输出 `first_launch_db_exit=0`。验收后已退出 App 并恢复原目录。 |
+| 数据库位置 | 通过 | 恢复原目录后，`test -f "$HOME/Library/Application Support/XWXTodo/xwxtodo.sqlite"` 返回 `0`，数据库位于 `/Users/xwx/Library/Application Support/XWXTodo/xwxtodo.sqlite`。 |
+| 无业务联网代码 | 通过 | `rg -n "URLSession|NWConnection|Network|http://|https://" XWXTodo/XWXTodo || true` 仅匹配 `XWXTodo.entitlements` 的 Apple plist DTD `http://www.apple.com/DTDs/PropertyList-1.0.dtd`，未发现业务联网 API 或网络 URL。 |
+| 分发限制 | 已记录 | `XWXTodo.zip` 使用 ad-hoc 签名且未 notarize；发给其他 Mac 时可能被 Gatekeeper 阻止，需要用户手动允许或后续补 notarization 流程。 |
+
 ## 记录明细
 
 | 项目 | 结果 | 记录 |
