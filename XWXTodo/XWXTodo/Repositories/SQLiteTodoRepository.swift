@@ -115,6 +115,9 @@ final class SQLiteTodoRepository: TodoRepository {
                 try bindDate(updatedAt, to: statement, at: 1)
                 try bindText(id.uuidString, to: statement, at: 2)
                 try stepDone(statement)
+                guard sqlite3_changes(database) == 1 else {
+                    throw SQLiteError.stepFailed("无法开始不存在或已完成的待办事项")
+                }
             }
 
             try execute("COMMIT;")
@@ -128,7 +131,7 @@ final class SQLiteTodoRepository: TodoRepository {
         let sql = """
         UPDATE todos
         SET status = 'completed', completed_at = ?, updated_at = ?
-        WHERE id = ?;
+        WHERE id = ? AND status <> 'completed';
         """
         try withPreparedStatement(sql) { statement in
             try bindDate(completedAt, to: statement, at: 1)

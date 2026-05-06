@@ -53,4 +53,61 @@ final class SQLiteTodoRepositoryTests: XCTestCase {
         XCTAssertEqual(completed.status, .completed)
         XCTAssertEqual(completed.completedAt, completedAt)
     }
+
+    func testSetDoingMissingIDThrowsAndLeavesExistingDoingUnchanged() throws {
+        let repository = try SQLiteTodoRepository(databaseURL: makeTemporaryDatabaseURL())
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        let doingAt = date.addingTimeInterval(1)
+        let failedAt = date.addingTimeInterval(2)
+        let item = TodoItem(id: UUID(), title: "A", status: .pending, createdAt: date, updatedAt: date, completedAt: nil, sortOrder: 0)
+        try repository.insert(item)
+        try repository.setDoing(id: item.id, updatedAt: doingAt)
+
+        XCTAssertThrowsError(try repository.setDoing(id: UUID(), updatedAt: failedAt))
+
+        let reloaded = try XCTUnwrap(repository.loadAll().first)
+        XCTAssertEqual(reloaded.status, .doing)
+        XCTAssertEqual(reloaded.updatedAt, doingAt)
+    }
+
+    func testSetDoingCompletedIDThrowsAndLeavesExistingDoingUnchanged() throws {
+        let repository = try SQLiteTodoRepository(databaseURL: makeTemporaryDatabaseURL())
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        let doingAt = date.addingTimeInterval(1)
+        let completedAt = date.addingTimeInterval(2)
+        let failedAt = date.addingTimeInterval(3)
+        let doing = TodoItem(id: UUID(), title: "A", status: .pending, createdAt: date, updatedAt: date, completedAt: nil, sortOrder: 0)
+        let completed = TodoItem(id: UUID(), title: "B", status: .pending, createdAt: date, updatedAt: date, completedAt: nil, sortOrder: 1)
+        try repository.insert(doing)
+        try repository.insert(completed)
+        try repository.setDoing(id: doing.id, updatedAt: doingAt)
+        try repository.complete(id: completed.id, completedAt: completedAt)
+
+        XCTAssertThrowsError(try repository.setDoing(id: completed.id, updatedAt: failedAt))
+
+        let todos = try repository.loadAll()
+        let reloadedDoing = try XCTUnwrap(todos.first { $0.id == doing.id })
+        let reloadedCompleted = try XCTUnwrap(todos.first { $0.id == completed.id })
+        XCTAssertEqual(reloadedDoing.status, .doing)
+        XCTAssertEqual(reloadedDoing.updatedAt, doingAt)
+        XCTAssertEqual(reloadedCompleted.status, .completed)
+        XCTAssertEqual(reloadedCompleted.completedAt, completedAt)
+    }
+
+    func testCompleteAlreadyCompletedItemDoesNotRewriteTimestamps() throws {
+        let repository = try SQLiteTodoRepository(databaseURL: makeTemporaryDatabaseURL())
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        let firstCompletedAt = date.addingTimeInterval(1)
+        let secondCompletedAt = date.addingTimeInterval(2)
+        let item = TodoItem(id: UUID(), title: "A", status: .pending, createdAt: date, updatedAt: date, completedAt: nil, sortOrder: 0)
+        try repository.insert(item)
+        try repository.complete(id: item.id, completedAt: firstCompletedAt)
+
+        try repository.complete(id: item.id, completedAt: secondCompletedAt)
+
+        let reloaded = try XCTUnwrap(repository.loadAll().first)
+        XCTAssertEqual(reloaded.status, .completed)
+        XCTAssertEqual(reloaded.completedAt, firstCompletedAt)
+        XCTAssertEqual(reloaded.updatedAt, firstCompletedAt)
+    }
 }
