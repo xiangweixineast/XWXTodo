@@ -135,12 +135,15 @@ struct TodoPanelView: View {
         }
     }
 
-    private func perform(_ action: () throws -> Void) {
+    @discardableResult
+    private func perform(_ action: () throws -> Void) -> Bool {
         do {
             try action()
             localError = nil
+            return true
         } catch {
             localError = error.localizedDescription
+            return false
         }
     }
 }

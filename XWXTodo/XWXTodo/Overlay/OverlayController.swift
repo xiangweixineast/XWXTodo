@@ -40,7 +40,8 @@ final class OverlayController {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 Task { @MainActor in
-                    self?.renderContent(positionIfVisible: true)
+                    guard let self, !self.isExpanded else { return }
+                    self.renderContent(positionIfVisible: true)
                 }
             }
     }

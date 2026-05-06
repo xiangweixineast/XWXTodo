@@ -4,7 +4,7 @@ struct TodoRowView: View {
     let todo: TodoItem
     let onStart: () -> Void
     let onDone: () -> Void
-    let onEdit: (String) -> Void
+    let onEdit: (String) -> Bool
     let onDelete: () -> Void
 
     @State private var isEditing = false
@@ -14,7 +14,7 @@ struct TodoRowView: View {
         todo: TodoItem,
         onStart: @escaping () -> Void,
         onDone: @escaping () -> Void,
-        onEdit: @escaping (String) -> Void,
+        onEdit: @escaping (String) -> Bool,
         onDelete: @escaping () -> Void
     ) {
         self.todo = todo
@@ -37,6 +37,7 @@ struct TodoRowView: View {
 
                 Button("Save", action: saveEdit)
                     .buttonStyle(.borderedProminent)
+                    .disabled(trimmedDraftTitle.isEmpty)
 
                 Button("Cancel", action: cancelEdit)
                     .buttonStyle(.bordered)
@@ -93,8 +94,15 @@ struct TodoRowView: View {
             }
     }
 
+    private var trimmedDraftTitle: String {
+        draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private func saveEdit() {
-        onEdit(draftTitle)
+        guard !trimmedDraftTitle.isEmpty else { return }
+        guard onEdit(trimmedDraftTitle) else { return }
+
+        draftTitle = trimmedDraftTitle
         isEditing = false
     }
 
