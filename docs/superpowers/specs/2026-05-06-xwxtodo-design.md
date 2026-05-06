@@ -1,134 +1,134 @@
-# XWXTodo Design
+# XWXTodo 设计规格
 
-Date: 2026-05-06
-Status: Draft approved in conversation
+日期：2026-05-06
+状态：已在对话中确认，待用户最终审阅
 
-## Summary
+## 概要
 
-XWXTodo is a macOS 14+ local-first TODO app for keeping the current task visible without requiring the user to remember opening Notes or another TODO tool.
+XWXTodo 是一款面向 macOS 14 及以上版本的纯本地 TODO 应用。它要解决的问题是：用户每天工作或学习时 TODO 太多，即使记录在本地记事本或备忘录里，也经常忘记打开对应软件检查。
 
-The app keeps a small black notch-like overlay at the physical top center of the primary display. The overlay shows the active TODO title. When no TODO is active, it shows `XWXTodo`. Hovering over the notch replaces it with a dropdown panel from the top edge of the screen. The panel contains the main TODO list and the controls needed to add, edit, delete, start, and complete TODO items.
+应用会在主屏幕物理顶部边缘的中间位置显示一个小型黑色刘海屏覆盖层。刘海屏显示当前正在处理的 TODO 标题；如果没有正在处理的 TODO，则显示 `XWXTodo`。鼠标悬停到刘海屏后，刘海屏会被从屏幕顶边展开的下拉弹窗替代。弹窗中显示主 TODO 列表，并提供新增、编辑、删除、开始和完成 TODO 的操作。
 
-The first version is intended as a local utility that can be zipped and shared directly. It is not designed for the Mac App Store. It does not include networking, syncing, accounts, built-in auto-start, signing, notarization, or automatic updates.
+第一版定位为本地自用工具，也可以打包成 zip 直接分享给别人使用。不考虑 Mac App Store 上架，不包含联网、同步、账号、内置开机启动、签名、公证或自动更新。
 
-## Goals
+## 目标
 
-- Record, edit, and delete active TODO items.
-- Mark exactly one TODO as the current active item.
-- Mark TODO items as completed.
-- Keep completed TODO items out of the main list.
-- Provide a Completed List for read-only history.
-- Store all data locally in SQLite.
-- Keep the top overlay visible at the primary display's physical top edge across desktop, normal apps, and full-screen app spaces where macOS allows it.
-- Preserve a Dock icon in the first version.
+- 记录、编辑、删除未完成或正在做的 TODO。
+- 标记且只允许标记一个 TODO 为当前正在做。
+- 将 TODO 标记为已完成。
+- 已完成 TODO 不出现在主列表中。
+- 提供只读的已完成列表，用于查看历史。
+- 所有数据使用本地 SQLite 存储。
+- 顶部覆盖层以主屏幕物理顶部边缘为定位基准，在桌面、普通 App、全屏 App 和独立 Space 中尽可能保持可见。
+- 第一版保留 Dock 图标。
 
-## Non-Goals
+## 非目标
 
-- App Store distribution.
-- Cloud sync or any network feature.
-- User accounts.
-- Menu bar extra as a second primary entry point.
-- Built-in login item or auto-start switch.
-- Multi-display overlays.
-- Recovery, editing, or deletion from the Completed List.
-- Drag-and-drop ordering in the first version.
-- Accessibility, screen recording, or input monitoring permissions unless later implementation testing proves they are unavoidable.
+- App Store 分发。
+- 云同步或任何联网功能。
+- 用户账号。
+- 将菜单栏图标作为第二个主要入口。
+- 内置登录项或开机自动启动开关。
+- 多显示器覆盖层。
+- 已完成列表中的恢复、编辑或删除操作。
+- 第一版不做拖拽排序。
+- 除非实现验证证明不可避免，否则不申请辅助功能、屏幕录制或输入监听权限。
 
-## Product Interaction
+## 产品交互
 
-The app has two visible overlay states:
+应用有两个顶部覆盖层状态：
 
-1. Collapsed notch
-   - Displayed at the primary display's physical top center.
-   - Black background.
-   - Shows the current active TODO title.
-   - Shows `XWXTodo` when no TODO is active.
-   - Long titles are truncated to one line.
+1. 收起态刘海屏
+   - 显示在主屏幕物理顶部边缘的中间位置。
+   - 黑色背景。
+   - 显示当前正在做的 TODO 标题。
+   - 没有正在做的 TODO 时显示 `XWXTodo`。
+   - 长标题单行截断。
 
-2. Expanded panel
-   - Triggered by hovering over the collapsed notch hot zone.
-   - Replaces the notch; the notch is not separately visible under or above the panel.
-   - Starts at the physical top edge of the screen.
-   - Contains the input and list controls.
-   - Collapses back to the notch when the pointer leaves the expanded panel region.
+2. 展开态弹窗
+   - 鼠标悬停到收起态刘海屏热区后触发。
+   - 展开态弹窗替代刘海屏；刘海屏不会继续显示在弹窗上方、下方或背后。
+   - 弹窗从屏幕物理顶边开始向下展开。
+   - 弹窗中包含输入框、主列表和操作按钮。
+   - 鼠标离开展开弹窗区域后，弹窗收起并恢复为刘海屏。
 
-The expanded panel supports:
+展开态弹窗支持：
 
-- Adding a TODO.
-- Editing a TODO title.
-- Deleting a pending or active TODO.
-- Starting a TODO, which makes it the only active item.
-- Completing a TODO.
-- Viewing the Completed List.
+- 新增 TODO。
+- 编辑 TODO 标题。
+- 删除未完成或正在做的 TODO。
+- 将某个 TODO 标记为正在做，并使它成为唯一正在做的事项。
+- 将 TODO 标记为已完成。
+- 查看已完成列表。
 
-The main TODO list shows only `pending` and `doing` items. Completed items are hidden from the main list and visible only in the Completed List. The Completed List is read-only in the first version.
+主 TODO 列表只显示 `pending` 和 `doing` 状态的事项。已完成事项从主列表中隐藏，只在已完成列表中显示。第一版已完成列表只读，不支持恢复、编辑或删除。
 
-## Architecture
+## 架构设计
 
-The first version should use native macOS technologies:
+第一版使用 macOS 原生技术：
 
-- SwiftUI for the app shell and panel content.
-- AppKit for the top-level overlay window behavior.
-- SQLite for local persistence.
+- SwiftUI 负责应用入口和弹窗内容界面。
+- AppKit 负责顶部覆盖层窗口行为。
+- SQLite 负责本地持久化。
 
-Primary modules:
+主要模块：
 
 - `XWXTodoApp`
-  - SwiftUI app entry point.
-  - Keeps the Dock icon.
-  - Starts the main app lifecycle and overlay controller.
+  - SwiftUI 应用入口。
+  - 保留 Dock 图标。
+  - 启动应用生命周期和覆盖层控制器。
 
 - `OverlayController`
-  - AppKit-owned controller for the collapsed notch and expanded panel.
-  - Positions the overlay on the primary display.
-  - Handles hover regions, expand/collapse transitions, and window level.
-  - Uses borderless, non-activating floating panels where appropriate.
-  - Adds the overlay to all spaces and supports full-screen auxiliary behavior.
+  - AppKit 层控制器，管理收起态刘海屏和展开态弹窗。
+  - 按主屏幕定位覆盖层。
+  - 处理悬停热区、展开/收起切换和窗口层级。
+  - 在适合的位置使用无边框、非激活的浮动面板。
+  - 将覆盖层加入所有 Space，并支持全屏辅助显示行为。
 
 - `TodoStore`
-  - Business state layer.
-  - Exposes add, edit, delete, start, complete, and query operations.
-  - Enforces the single active TODO rule.
-  - Keeps SwiftUI views independent from SQLite details.
+  - 业务状态层。
+  - 暴露新增、编辑、删除、开始、完成和查询操作。
+  - 强制保证“最多只有一个正在做”的规则。
+  - 让 SwiftUI 视图不依赖 SQLite 细节。
 
 - `SQLiteTodoRepository`
-  - Owns local SQLite access.
-  - Initializes and migrates the database.
-  - Performs CRUD operations and transactional state changes.
+  - 负责本地 SQLite 访问。
+  - 初始化和迁移数据库。
+  - 执行 CRUD 操作和事务化状态变更。
 
 - `SwiftUI Views`
-  - Render the collapsed notch content and expanded panel content.
-  - Keep UI behavior declarative and route mutations through `TodoStore`.
+  - 渲染刘海屏内容和展开态弹窗内容。
+  - 保持 UI 声明式，所有数据修改通过 `TodoStore` 发起。
 
-The main separation is intentional: AppKit owns system window behavior, SwiftUI owns list rendering and interaction, and the store/repository layers own state consistency and persistence.
+核心边界是：AppKit 负责系统窗口行为，SwiftUI 负责列表渲染和交互，Store/Repository 负责状态一致性和持久化。这样可以避免把窗口层级、界面代码和数据库代码混在一起。
 
-## Overlay Behavior
+## 覆盖层行为
 
-The overlay is not part of the desktop, the main window, or the active app's content area. It is a separate system-level overlay owned by XWXTodo.
+顶部覆盖层不是桌面内容、主窗口内容，也不是当前活跃 App 的内容区域。它是 XWXTodo 自己管理的独立系统级覆盖层。
 
-Implementation should start with an AppKit `NSPanel` or equivalent borderless window configured as:
+实现应从 AppKit 的 `NSPanel` 或等价无边框窗口开始，配置方向如下：
 
-- Borderless.
-- Non-activating where possible.
-- Floating above ordinary app windows.
-- Joined to all spaces.
-- Full-screen auxiliary capable.
-- Positioned relative to the primary display frame, not a content window frame.
+- 无边框。
+- 尽可能非激活，不抢当前 App 焦点。
+- 浮在普通 App 窗口之上。
+- 加入所有 Space。
+- 支持全屏辅助显示。
+- 以主屏幕 frame 定位，而不是以某个内容窗口 frame 定位。
 
-Implementation must explicitly verify:
+实现阶段必须明确验证：
 
-- Desktop visibility.
-- Normal app visibility.
-- Full-screen app visibility.
-- Space switching behavior.
-- Whether the panel steals focus.
-- Whether hover tracking still works over full-screen apps.
+- 桌面可见性。
+- 普通 App 上方可见性。
+- 全屏 App 上方可见性。
+- Space 切换行为。
+- 面板是否会抢焦点。
+- 全屏 App 上方的悬停追踪是否仍然工作。
 
-If full-screen apps obscure the overlay, implementation may raise the window level while preserving the constraints that the overlay remains small, non-disruptive, and does not request unnecessary permissions.
+如果全屏 App 遮挡覆盖层，可以提高窗口 level，但仍要保持约束：覆盖层尺寸小、行为可预测、不大面积遮挡内容，并且不申请不必要的系统权限。
 
-## Data Model
+## 数据模型
 
-`TodoItem`:
+`TodoItem`：
 
 - `id: UUID`
 - `title: String`
@@ -138,106 +138,106 @@ If full-screen apps obscure the overlay, implementation may raise the window lev
 - `completedAt: Date?`
 - `sortOrder: Int`
 
-Rules:
+规则：
 
-- `title` is trimmed before save.
-- Empty titles are not saved.
-- At most one item may have `doing` status.
-- Starting an item changes the previous `doing` item back to `pending`.
-- Completing an item sets `status = completed` and writes `completedAt`.
-- Completed items do not appear in the main TODO list.
-- Completed items are shown by `completedAt` descending.
-- Pending and doing items are shown by `sortOrder`.
-- Delete is available only for pending and doing items.
+- 保存前去掉 `title` 首尾空格。
+- 空标题不保存。
+- 最多只能有一条事项处于 `doing` 状态。
+- 将某条事项设为正在做时，原来的 `doing` 事项自动回到 `pending`。
+- 完成事项时设置 `status = completed`，并写入 `completedAt`。
+- 已完成事项不出现在主 TODO 列表中。
+- 已完成事项按 `completedAt` 倒序显示。
+- 未完成和正在做的事项按 `sortOrder` 显示。
+- 删除操作只对未完成和正在做的事项开放。
 
-SQLite should reinforce the single `doing` rule with transactional updates. A partial unique index for `doing` status is acceptable if it fits the SQLite version available through the chosen integration.
+SQLite 层需要用事务强化“只有一个 doing”的规则。如果所选 SQLite 集成支持合适版本，可以增加针对 `doing` 状态的局部唯一索引来防御脏数据。
 
-## Storage
+## 存储
 
-The app stores data only on the local machine.
+应用只在本机存储数据。
 
-Default database location:
+默认数据库位置：
 
 ```text
 ~/Library/Application Support/XWXTodo/xwxtodo.sqlite
 ```
 
-The repository should create the application support directory and database on first launch. Schema creation and migrations should be idempotent.
+Repository 需要在首次启动时创建 Application Support 目录和数据库。建表和迁移逻辑必须是幂等的。
 
-No network stack, account storage, analytics, telemetry, or sync service should be added in the first version.
+第一版不加入网络栈、账号存储、分析统计、遥测或同步服务。
 
-## Error Handling
+## 错误处理
 
-- If the database cannot open or migrate, the app should avoid crashing where possible.
-- In database failure mode, the notch can still show `XWXTodo`, and the main window or panel should present a clear local error.
-- Empty titles should not save; the input remains editable without a disruptive alert.
-- Long titles should be truncated in the notch and list rows.
-- The full title should remain visible while editing.
-- If there are no TODOs, the expanded panel shows an empty state and the add input.
-- If there are TODOs but no active item, the notch shows `XWXTodo`.
+- 如果数据库无法打开或迁移失败，应用应尽量避免崩溃。
+- 数据库失败模式下，刘海屏仍可显示 `XWXTodo`，主窗口或弹窗中显示清晰的本地错误信息。
+- 空标题不保存，输入框保持可编辑，不弹出打断式复杂错误提示。
+- 长标题在刘海屏和列表行中截断。
+- 编辑状态下应能看到完整标题。
+- 没有 TODO 时，展开态弹窗显示空状态和新增输入框。
+- 有 TODO 但没有正在做事项时，刘海屏显示 `XWXTodo`。
 
-## Distribution
+## 分发方式
 
-The first version is distributed as a zipped `.app`.
+第一版以压缩后的 `.app` 分发。
 
-The initial distribution workflow only needs to produce:
+初始分发流程只需要产出：
 
 ```text
 XWXTodo.app
 XWXTodo.zip
 ```
 
-Signing, notarization, Sparkle updates, and App Store packaging are outside the first version.
+签名、公证、Sparkle 更新和 App Store 打包不在第一版范围内。
 
-## Testing And Acceptance
+## 测试与验收
 
-Unit tests should cover `TodoStore` behavior:
+`TodoStore` 单元测试需要覆盖：
 
-- Add TODO.
-- Edit TODO.
-- Delete pending or doing TODO.
-- Start TODO.
-- Ensure only one `doing` item exists.
-- Complete TODO.
-- Filter main list.
-- Filter completed list.
+- 新增 TODO。
+- 编辑 TODO。
+- 删除未完成或正在做的 TODO。
+- 开始 TODO。
+- 确保只有一个 `doing` 事项。
+- 完成 TODO。
+- 主列表过滤。
+- 已完成列表过滤。
 
-Database tests should cover:
+数据库测试需要覆盖：
 
-- Database initialization.
-- CRUD persistence.
-- Transactional `doing` switching.
-- `completedAt` persistence.
-- Completed list ordering.
-- Data surviving app restart.
+- 数据库初始化。
+- CRUD 持久化。
+- 事务化切换 `doing` 状态。
+- `completedAt` 持久化。
+- 已完成列表排序。
+- 应用重启后数据仍存在。
 
-Manual UI acceptance should cover:
+手动 UI 验收需要覆盖：
 
-- Dock icon is present.
-- Notch is centered at the primary display's physical top edge.
-- Notch shows `XWXTodo` when no TODO is active.
-- Notch shows the active TODO title when one item is doing.
-- Hovering the notch replaces it with the expanded panel.
-- The expanded panel hides the notch instead of appearing below it.
-- Pointer exit collapses the panel back to the notch.
-- Add, edit, delete, start, and complete work in the expanded panel.
-- Completed items disappear from the main list.
-- Completed List is read-only.
-- Long titles truncate cleanly.
-- The overlay remains visible over the desktop.
-- The overlay remains visible over ordinary apps.
-- The overlay behavior is verified over full-screen apps and separate spaces.
+- Dock 图标存在。
+- 刘海屏居中显示在主屏幕物理顶部边缘。
+- 没有正在做事项时，刘海屏显示 `XWXTodo`。
+- 有正在做事项时，刘海屏显示该 TODO 标题。
+- 鼠标悬停刘海屏后，刘海屏被展开态弹窗替代。
+- 展开态弹窗隐藏刘海屏，而不是显示在刘海屏下方。
+- 鼠标离开展开态弹窗后，恢复为刘海屏。
+- 在展开态弹窗中可以新增、编辑、删除、开始和完成 TODO。
+- 已完成事项从主列表中消失。
+- 已完成列表只读。
+- 长标题能自然截断。
+- 覆盖层在桌面上可见。
+- 覆盖层在普通 App 上方可见。
+- 覆盖层在全屏 App 和独立 Space 中的行为经过验证。
 
-Packaging acceptance:
+打包验收：
 
-- Build a `.app`.
-- Zip the `.app`.
-- Unzip and launch in a clean user context or another macOS 14+ machine.
-- Confirm the database is created locally on first launch.
-- Confirm the app has no network dependency.
+- 构建 `.app`。
+- 将 `.app` 压缩为 zip。
+- 在干净用户环境或另一台 macOS 14+ 设备上解压并启动。
+- 确认首次启动会自动创建本地数据库。
+- 确认应用没有联网依赖。
 
-## Open Implementation Risks
+## 实现风险
 
-- macOS may restrict overlay visibility above some full-screen apps depending on window level and collection behavior.
-- Non-activating hover behavior must be verified carefully so the overlay does not steal focus from the user's current app.
-- Very high window levels can create bad user experience if used carelessly; the overlay should remain small and predictable.
+- macOS 可能会根据窗口 level 和 collection behavior 限制覆盖层显示在某些全屏 App 之上。
+- 非激活悬停行为需要仔细验证，避免覆盖层抢走用户当前 App 的焦点。
+- 过高的窗口 level 如果使用不当会造成糟糕体验；覆盖层必须保持小、稳定、可预测。
