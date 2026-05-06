@@ -63,7 +63,7 @@ final class OverlayController {
         panel.hasShadow = false
         panel.hidesOnDeactivate = false
         panel.becomesKeyOnlyIfNeeded = true
-        // The notch is anchored to the physical top edge, above the menu bar and full-screen spaces.
+        // Keep the overlay above the menu bar and full-screen Spaces at the physical top edge.
         panel.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.screenSaverWindow)))
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         panel.contentViewController = hostingController
