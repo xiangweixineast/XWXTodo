@@ -1,0 +1,146 @@
+import SwiftUI
+
+struct TodoPanelView: View {
+    @ObservedObject var store: TodoStore
+    let onHoverChanged: (Bool) -> Void
+
+    @State private var newTitle = ""
+    @State private var localError: String?
+    @State private var isShowingCompleted = false
+
+    var body: some View {
+        VStack(spacing: 12) {
+            header
+
+            if let message = localError ?? store.errorMessage {
+                ErrorBannerView(message: message)
+            }
+
+            if isShowingCompleted {
+                CompletedListView(store: store) {
+                    isShowingCompleted = false
+                }
+            } else {
+                addTodoBar
+                activeList
+                footer
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.bottom, 14)
+        .frame(width: OverlayMetrics.panelWidth, height: OverlayMetrics.panelHeight)
+        .background(Color.black)
+        .foregroundStyle(.white)
+        .onHover(perform: onHoverChanged)
+    }
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            Text(store.notchTitle)
+                .font(.system(size: 14, weight: .semibold))
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text("Now")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.black)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(.white, in: Capsule())
+        }
+        .frame(height: 36)
+    }
+
+    private var addTodoBar: some View {
+        HStack(spacing: 8) {
+            TextField("New TODO", text: $newTitle)
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 13))
+                .onSubmit(addTodo)
+
+            Button("Add", action: addTodo)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+        }
+    }
+
+    private var activeList: some View {
+        Group {
+            if store.activeTodos.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "tray")
+                        .font(.system(size: 24))
+                        .foregroundStyle(.secondary)
+                    Text("No active todos")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 8) {
+                        ForEach(store.activeTodos) { todo in
+                            TodoRowView(
+                                todo: todo,
+                                onStart: {
+                                    perform {
+                                        try store.startTodo(id: todo.id)
+                                    }
+                                },
+                                onDone: {
+                                    perform {
+                                        try store.completeTodo(id: todo.id)
+                                    }
+                                },
+                                onEdit: { title in
+                                    perform {
+                                        try store.editTodo(id: todo.id, title: title)
+                                    }
+                                },
+                                onDelete: {
+                                    perform {
+                                        try store.deleteTodo(id: todo.id)
+                                    }
+                                }
+                            )
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+        }
+    }
+
+    private var footer: some View {
+        HStack {
+            Text("\(store.activeTodos.count) active")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Button("Completed") {
+                isShowingCompleted = true
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+    }
+
+    private func addTodo() {
+        perform {
+            try store.addTodo(title: newTitle)
+            newTitle = ""
+        }
+    }
+
+    private func perform(_ action: () throws -> Void) {
+        do {
+            try action()
+            localError = nil
+        } catch {
+            localError = error.localizedDescription
+        }
+    }
+}

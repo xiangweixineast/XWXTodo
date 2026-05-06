@@ -6,7 +6,7 @@ import SwiftUI
 final class OverlayController {
     private let store: TodoStore
     private let panel: OverlayPanel
-    private let hostingController: NSHostingController<NotchView>
+    private let hostingController: NSHostingController<AnyView>
     private var screenObserver: NSObjectProtocol?
     private var todosCancellable: AnyCancellable?
     private var isExpanded = false
@@ -20,11 +20,11 @@ final class OverlayController {
             defer: false
         )
         self.hostingController = NSHostingController(
-            rootView: NotchView(title: store.notchTitle) { _ in }
+            rootView: AnyView(EmptyView())
         )
 
         configurePanel()
-        updateNotchView(positionIfVisible: false)
+        renderContent(positionIfVisible: false)
 
         screenObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
@@ -40,7 +40,7 @@ final class OverlayController {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 Task { @MainActor in
-                    self?.updateNotchView(positionIfVisible: true)
+                    self?.renderContent(positionIfVisible: true)
                 }
             }
     }
@@ -68,14 +68,24 @@ final class OverlayController {
         panel.contentViewController = hostingController
     }
 
-    private func updateNotchView(positionIfVisible: Bool) {
-        hostingController.rootView = NotchView(title: store.notchTitle) { [weak self] isHovering in
-            guard isHovering else {
-                self?.isExpanded = false
-                return
-            }
+    private func renderContent(positionIfVisible: Bool) {
+        if isExpanded {
+            hostingController.rootView = AnyView(
+                TodoPanelView(store: store) { [weak self] isHovering in
+                    guard !isHovering else { return }
+                    self?.collapseAfterMouseExit()
+                }
+            )
+        } else {
+            hostingController.rootView = AnyView(
+                NotchView(title: store.notchTitle) { [weak self] isHovering in
+                    guard isHovering else {
+                        return
+                    }
 
-            self?.expand()
+                    self?.expand()
+                }
+            )
         }
 
         if positionIfVisible, panel.isVisible {
@@ -86,10 +96,19 @@ final class OverlayController {
     private func positionPanel() {
         guard let screen = NSScreen.main else { return }
 
-        hostingController.view.layoutSubtreeIfNeeded()
-        let fittingSize = hostingController.view.fittingSize
-        let width = max(OverlayMetrics.notchMinWidth, fittingSize.width)
-        let height = OverlayMetrics.notchHeight
+        let width: CGFloat
+        let height: CGFloat
+
+        if isExpanded {
+            width = OverlayMetrics.panelWidth
+            height = OverlayMetrics.panelHeight
+        } else {
+            hostingController.view.layoutSubtreeIfNeeded()
+            let fittingSize = hostingController.view.fittingSize
+            width = max(OverlayMetrics.notchMinWidth, fittingSize.width)
+            height = OverlayMetrics.notchHeight
+        }
+
         let x = screen.frame.midX - width / 2
         let y = screen.frame.maxY - height
         let size = NSSize(width: width, height: height)
@@ -106,5 +125,21 @@ final class OverlayController {
         guard !isExpanded else { return }
 
         isExpanded = true
+        renderContent(positionIfVisible: true)
+    }
+
+    private func collapse() {
+        guard isExpanded else { return }
+
+        isExpanded = false
+        renderContent(positionIfVisible: true)
+    }
+
+    private func collapseAfterMouseExit() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            guard let self else { return }
+            guard !self.panel.frame.contains(NSEvent.mouseLocation) else { return }
+            self.collapse()
+        }
     }
 }
