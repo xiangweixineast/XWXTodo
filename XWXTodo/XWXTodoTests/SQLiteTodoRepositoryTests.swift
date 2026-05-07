@@ -24,6 +24,40 @@ final class SQLiteTodoRepositoryTests: XCTestCase {
         XCTAssertEqual(reloaded, [item])
     }
 
+    func testUpdatePersistsChangedTodo() throws {
+        let repository = try SQLiteTodoRepository(databaseURL: makeTemporaryDatabaseURL())
+        let createdAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let updatedAt = createdAt.addingTimeInterval(10)
+        let item = TodoItem(id: UUID(), title: "Before", status: .pending, createdAt: createdAt, updatedAt: createdAt, completedAt: nil, sortOrder: 0)
+        try repository.insert(item)
+
+        let updated = TodoItem(
+            id: item.id,
+            title: "After",
+            status: .doing,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            completedAt: nil,
+            sortOrder: 2
+        )
+        try repository.update(updated)
+
+        XCTAssertEqual(try repository.loadAll(), [updated])
+    }
+
+    func testDeleteRemovesActiveTodo() throws {
+        let repository = try SQLiteTodoRepository(databaseURL: makeTemporaryDatabaseURL())
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        let first = TodoItem(id: UUID(), title: "A", status: .pending, createdAt: date, updatedAt: date, completedAt: nil, sortOrder: 0)
+        let second = TodoItem(id: UUID(), title: "B", status: .pending, createdAt: date, updatedAt: date, completedAt: nil, sortOrder: 1)
+        try repository.insert(first)
+        try repository.insert(second)
+
+        try repository.delete(id: first.id)
+
+        XCTAssertEqual(try repository.loadAll(), [second])
+    }
+
     func testSetDoingIsTransactionalAndLeavesOnlyOneDoing() throws {
         let repository = try SQLiteTodoRepository(databaseURL: makeTemporaryDatabaseURL())
         let date = Date(timeIntervalSince1970: 1_800_000_000)

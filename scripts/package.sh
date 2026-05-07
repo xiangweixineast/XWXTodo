@@ -17,7 +17,10 @@ xcodebuild build \
   -destination "$DESTINATION" \
   -configuration Release \
   -derivedDataPath "$DERIVED_DATA" \
-  CODE_SIGNING_ALLOWED=NO
+  CODE_SIGNING_ALLOWED=NO \
+  ENABLE_CODE_COVERAGE=NO \
+  CLANG_ENABLE_CODE_COVERAGE=NO \
+  CLANG_COVERAGE_MAPPING=NO
 
 APP_PATH="$DERIVED_DATA/Build/Products/Release/XWXTodo.app"
 if [[ ! -d "$APP_PATH" ]]; then

@@ -4,7 +4,8 @@ import SwiftUI
 
 @MainActor
 final class OverlayController {
-    private let store: TodoStore
+    private let store: TodoStore?
+    private let fallbackTitle: String
     private let panel: OverlayPanel
     private let hostingController: NSHostingController<AnyView>
     private var screenObserver: NSObjectProtocol?
@@ -13,6 +14,7 @@ final class OverlayController {
 
     init(store: TodoStore) {
         self.store = store
+        self.fallbackTitle = "XWXTodo"
         self.panel = OverlayPanel(
             contentRect: .zero,
             styleMask: [.borderless, .nonactivatingPanel],
@@ -25,16 +27,7 @@ final class OverlayController {
 
         configurePanel()
         renderContent(positionIfVisible: false)
-
-        screenObserver = NotificationCenter.default.addObserver(
-            forName: NSApplication.didChangeScreenParametersNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
-                self?.positionPanel()
-            }
-        }
+        observeScreenChanges()
 
         todosCancellable = store.$todos
             .receive(on: RunLoop.main)
@@ -44,6 +37,36 @@ final class OverlayController {
                     self.renderContent(positionIfVisible: true)
                 }
             }
+    }
+
+    init(fallbackTitle: String = "XWXTodo") {
+        self.store = nil
+        self.fallbackTitle = fallbackTitle
+        self.panel = OverlayPanel(
+            contentRect: .zero,
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        self.hostingController = NSHostingController(
+            rootView: AnyView(EmptyView())
+        )
+
+        configurePanel()
+        renderContent(positionIfVisible: false)
+        observeScreenChanges()
+    }
+
+    private func observeScreenChanges() {
+        screenObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.positionPanel()
+            }
+        }
     }
 
     deinit {
@@ -70,7 +93,7 @@ final class OverlayController {
     }
 
     private func renderContent(positionIfVisible: Bool) {
-        if isExpanded {
+        if isExpanded, let store {
             hostingController.rootView = AnyView(
                 TodoPanelView(store: store) { [weak self] isHovering in
                     guard !isHovering else { return }
@@ -78,11 +101,11 @@ final class OverlayController {
                 }
             )
         } else {
+            isExpanded = false
+            let title = store?.notchTitle ?? fallbackTitle
             hostingController.rootView = AnyView(
-                NotchView(title: store.notchTitle) { [weak self] isHovering in
-                    guard isHovering else {
-                        return
-                    }
+                NotchView(title: title) { [weak self] isHovering in
+                    guard isHovering, self?.store != nil else { return }
 
                     self?.expand()
                 }
@@ -100,7 +123,7 @@ final class OverlayController {
         let width: CGFloat
         let height: CGFloat
 
-        if isExpanded {
+        if isExpanded, store != nil {
             width = OverlayMetrics.panelWidth
             height = OverlayMetrics.panelHeight
         } else {

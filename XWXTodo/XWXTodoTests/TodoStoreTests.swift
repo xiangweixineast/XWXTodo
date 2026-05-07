@@ -63,6 +63,31 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertEqual(store.completedTodos.count, 1)
     }
 
+    func testEditTodoTrimsActiveTitleAndUpdatesTimestamp() throws {
+        let id = UUID()
+        let editedAt = baseDate.addingTimeInterval(10)
+        let item = makeTodo(id: id, title: "Original")
+        let store = try TodoStore(repository: InMemoryTodoRepository(items: [item]), now: { editedAt })
+
+        try store.editTodo(id: id, title: "  Changed  ")
+
+        XCTAssertEqual(store.activeTodos[0].title, "Changed")
+        XCTAssertEqual(store.activeTodos[0].updatedAt, editedAt)
+    }
+
+    func testDeleteTodoRemovesActiveTodo() throws {
+        let firstID = UUID()
+        let secondID = UUID()
+        let first = makeTodo(id: firstID, title: "A", sortOrder: 0)
+        let second = makeTodo(id: secondID, title: "B", sortOrder: 1)
+        let store = try TodoStore(repository: InMemoryTodoRepository(items: [first, second]), now: { self.baseDate })
+
+        try store.deleteTodo(id: firstID)
+
+        XCTAssertEqual(store.activeTodos.map(\.id), [secondID])
+        XCTAssertEqual(store.activeTodos.map(\.title), ["B"])
+    }
+
     func testActiveTodosTieBreakEqualSortOrderByCreatedAtAscending() throws {
         let later = makeTodo(title: "Later", createdAt: baseDate.addingTimeInterval(10), sortOrder: 0)
         let earlier = makeTodo(title: "Earlier", createdAt: baseDate, sortOrder: 0)

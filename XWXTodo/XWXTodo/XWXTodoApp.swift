@@ -27,7 +27,7 @@ final class AppState: ObservableObject {
             self.overlayController = OverlayController(store: store)
         } catch {
             self.store = nil
-            self.overlayController = nil
+            self.overlayController = OverlayController(fallbackTitle: "XWXTodo")
             self.startupError = error.localizedDescription
         }
     }
