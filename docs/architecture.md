@@ -51,6 +51,12 @@ Views -> TodoStore -> TodoRepository -> SQLiteTodoRepository -> SQLite
 OverlayController -> OverlayPanel -> NotchView / TodoPanelView
 ```
 
+覆盖层状态：
+
+```text
+collapsed -> expanding -> expanded -> collapsing -> collapsed
+```
+
 启动装配：
 
 ```text
@@ -62,8 +68,14 @@ XWXTodoApp -> AppState -> SQLiteTodoRepository + TodoStore + OverlayController
 - 视图只调用 `TodoStore`，不直接访问数据库。
 - `TodoStore` 是 TODO 业务规则唯一入口。
 - `TodoStore` 只依赖 `TodoRepository` 协议。
+- `TodoStore` 提供列表排序、唯一 doing 状态入口和刘海屏显示文案。
 - SQLite 细节只在 `SQLiteTodoRepository`。
 - 覆盖层窗口行为只在 `Overlay/`。
+- `OverlayController` 持有 `OverlayPanel` 和 `NSHostingController<AnyView>`。
+- 收起态 frame 按 `TodoStore.collapsedNotchTitle` 和 `NotchView` fitting size 计算，高度固定为 `OverlayMetrics.notchHeight`。
+- 展开态 frame 固定为 `OverlayMetrics.panelWidth` x `OverlayMetrics.panelHeight`。
+- 悬停展开和离开收回通过 `Timer` 以约 60fps 插值 `NSPanel` frame；屏幕参数变化和显示覆盖层时直接定位。
+- 展开和收回期间保持 `TodoPanelView` 内容，收回动画结束后切回 `NotchView`。
 
 ## 3. 数据库结构
 

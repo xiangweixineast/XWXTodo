@@ -13,7 +13,8 @@
 ## 结果记录
 
 - macOS 版本：15.2 (24C101)
-- 测试日期：2026-05-07
+- 基础覆盖层测试日期：2026-05-07
+- 最新 Release 验收日期：2026-05-09
 - `panel.level`：`NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.screenSaverWindow)))`，实测窗口层级 `1000`
 - 全屏 App 测试结果：通过。Finder 全屏 Space 中覆盖层仍 `onscreen=1`，收起态位于 `X=820, Y=0, Width=280, Height=34`，展开态位于 `X=730, Y=0, Width=460, Height=360`。
 - 层级选择说明：当前选择 `screenSaverWindow`，因为覆盖层需要贴物理屏幕顶边并覆盖全屏 Space。该层级偏强，风险是覆盖系统或 App 顶部内容；当前通过小尺寸收起态、固定宽高展开态和鼠标离开自动收起来控制遮挡范围。暂不降级到 `.statusBar`、`.popUpMenu` 或 `.modalPanel`。
@@ -22,13 +23,14 @@
 
 | 项目 | 结果 | 记录 |
 | --- | --- | --- |
-| 完整测试 | 通过 | `xcodebuild test -project XWXTodo/XWXTodo.xcodeproj -scheme XWXTodo -destination 'platform=macOS'` 返回 `** TEST SUCCEEDED **`，共 21 个测试、0 个失败。 |
+| 完整测试 | 通过 | `xcodebuild test -project XWXTodo/XWXTodo.xcodeproj -scheme XWXTodo -destination 'platform=macOS'` 返回 `** TEST SUCCEEDED **`，共 23 个测试、0 个失败。 |
 | Debug 构建 | 通过 | `xcodebuild build -project XWXTodo/XWXTodo.xcodeproj -scheme XWXTodo -configuration Debug` 返回 `** BUILD SUCCEEDED **`。 |
-| Release 打包 | 通过 | `./scripts/package.sh` 返回 `** BUILD SUCCEEDED **` 并生成 `dist/XWXTodo.zip`；生成时间 `2026-05-07 21:42:37 +0800`，SHA256 `31ce2644262578b05d118f9a72184e2ecb097a46be3a0141ffe464541d032b27`；包内包含 `_CodeSignature/CodeResources`，未发现 `._` AppleDouble 条目。 |
-| Release 插桩检查 | 通过 | 解压后使用 `strings` 和 `otool -l` 检查 `Contents/MacOS/XWXTodo`，未发现 `LLVM_PROFILE_FILE`、`default.profraw`、`__llvm_prf` 或 `__LLVM_COV`。 |
-| Zip 解压启动 | 通过 | 从上述 `dist/XWXTodo.zip` 解压到 `/tmp/XWXTodo-release-check` 后，`codesign --verify --deep --strict` 通过；启动进程路径为 `/tmp/XWXTodo-release-check/XWXTodo.app/Contents/MacOS/XWXTodo`。 |
-| 通用架构 | 通过 | 解压后的可执行文件为 `x86_64` 和 `arm64` 双架构 Mach-O。 |
-| 顶部覆盖层 | 通过 | 解压产物启动后，系统窗口列表显示 XWXTodo 覆盖层 `layer=1000`、`onscreen=1`、`X=820, Y=0, Width=280, Height=34`。 |
+| Release 打包 | 通过 | `./scripts/package.sh` 返回 `** BUILD SUCCEEDED **` 并生成 `dist/XWXTodo.zip`；生成时间 `2026-05-09 01:28:13 +0800`，SHA256 `0ad12d38e852bbfa2bf4fc825b8f67883f416715037387a90841912960c72137`；包内包含 `_CodeSignature/CodeResources`，未发现 `._` AppleDouble 条目。 |
+| Release 插桩检查 | 通过 | 使用 `strings` 检查 `build/DerivedData/Build/Products/Release/XWXTodo.app/Contents/MacOS/XWXTodo`，未发现 `LLVM_PROFILE_FILE`、`default.profraw`、`__llvm_prf` 或 `__LLVM_COV`。 |
+| Zip 内容校验 | 通过 | `unzip -t dist/XWXTodo.zip` 无错误；`codesign --verify --deep --strict build/DerivedData/Build/Products/Release/XWXTodo.app` 通过。 |
+| 通用架构 | 通过 | Release 可执行文件为 `x86_64` 和 `arm64` 双架构 Mach-O。 |
+| 顶部覆盖层 | 通过 | Release app 启动后，系统窗口列表显示 XWXTodo 覆盖层 `layer=1000`、收起态位于 `X=820, Y=0, Width=280, Height=34`。 |
+| Release 覆盖层动画 | 通过 | Release app 采样显示：悬停后从 `280x34` 平滑展开到 `460x360`，展开采样到 18 个不同尺寸；鼠标离开后平滑收回到 `280x34`，收回采样到 19 个不同尺寸。 |
 | 首次启动创建数据库 | 通过 | 退出 App 并完整备份现有 `/Users/xwx/Library/Application Support/XWXTodo` 后，临时移走该目录并启动 `/tmp/XWXTodo-qa/XWXTodo.app`；执行 `test -f "$HOME/Library/Application Support/XWXTodo/xwxtodo.sqlite"` 后输出 `first_launch_db_exit=0`。验收后已退出 App 并恢复原目录。 |
 | 数据库位置 | 通过 | 恢复原目录后，`test -f "$HOME/Library/Application Support/XWXTodo/xwxtodo.sqlite"` 返回 `0`，数据库位于 `/Users/xwx/Library/Application Support/XWXTodo/xwxtodo.sqlite`。 |
 | 数据库失败 fallback 刘海屏 | 通过 | 退出 App 并完整备份现有 `/Users/xwx/Library/Application Support/XWXTodo` 后，用同名文件阻塞数据库目录创建并启动 `/tmp/XWXTodo-release-check/XWXTodo.app`；App 仍启动，系统窗口列表显示 fallback 刘海屏覆盖层 `layer=1000`、`onscreen=1`、`X=820, Y=0, Width=280, Height=34`。验收后已退出 App 并恢复原目录。 |
