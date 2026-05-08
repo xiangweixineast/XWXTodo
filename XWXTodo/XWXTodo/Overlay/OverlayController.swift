@@ -1,16 +1,36 @@
 import AppKit
 import Combine
+import QuartzCore
 import SwiftUI
 
 @MainActor
 final class OverlayController {
+    private enum PresentationState {
+        case collapsed
+        case expanding
+        case expanded
+        case collapsing
+    }
+
+    private enum LayoutState {
+        case collapsed
+        case expanded
+    }
+
+    private static let transitionDuration: TimeInterval = 0.30
+    private static let collapseDelay: TimeInterval = 0.15
+
     private let store: TodoStore?
     private let fallbackTitle: String
     private let panel: OverlayPanel
     private let hostingController: NSHostingController<AnyView>
     private var screenObserver: NSObjectProtocol?
     private var todosCancellable: AnyCancellable?
-    private var isExpanded = false
+    private var presentationState = PresentationState.collapsed
+    private var animationGeneration = 0
+    private var animationTimer: Timer?
+    private var pendingCollapseWorkItem: DispatchWorkItem?
+    private var shouldCollapseAfterExpansion = false
 
     init(store: TodoStore) {
         self.store = store
@@ -33,7 +53,7 @@ final class OverlayController {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 Task { @MainActor in
-                    guard let self, !self.isExpanded else { return }
+                    guard let self, self.presentationState == .collapsed else { return }
                     self.renderContent(positionIfVisible: true)
                 }
             }
@@ -73,6 +93,9 @@ final class OverlayController {
         if let screenObserver {
             NotificationCenter.default.removeObserver(screenObserver)
         }
+
+        pendingCollapseWorkItem?.cancel()
+        animationTimer?.invalidate()
     }
 
     func show() {
@@ -81,6 +104,7 @@ final class OverlayController {
     }
 
     private func configurePanel() {
+        hostingController.sizingOptions = []
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
@@ -93,15 +117,18 @@ final class OverlayController {
     }
 
     private func renderContent(positionIfVisible: Bool) {
-        if isExpanded, let store {
+        if shouldShowPanelContent, let store {
             hostingController.rootView = AnyView(
                 TodoPanelView(store: store) { [weak self] isHovering in
-                    guard !isHovering else { return }
+                    if isHovering {
+                        self?.cancelPendingCollapse()
+                        return
+                    }
+
                     self?.collapseAfterMouseExit()
                 }
             )
         } else {
-            isExpanded = false
             let title = store?.notchTitle ?? fallbackTitle
             hostingController.rootView = AnyView(
                 NotchView(title: title) { [weak self] isHovering in
@@ -118,52 +145,202 @@ final class OverlayController {
     }
 
     private func positionPanel() {
-        guard let screen = NSScreen.main else { return }
+        guard let frame = targetFrame(for: currentLayoutState) else { return }
 
-        let width: CGFloat
-        let height: CGFloat
+        animationTimer?.invalidate()
+        animationTimer = nil
+        applyPanelFrame(frame)
+    }
 
-        if isExpanded, store != nil {
-            width = OverlayMetrics.panelWidth
-            height = OverlayMetrics.panelHeight
-        } else {
-            hostingController.view.layoutSubtreeIfNeeded()
-            let fittingSize = hostingController.view.fittingSize
-            width = max(OverlayMetrics.notchMinWidth, fittingSize.width)
-            height = OverlayMetrics.notchHeight
+    private func targetFrame(for layoutState: LayoutState) -> NSRect? {
+        guard let screen = NSScreen.main else { return nil }
+
+        let size: NSSize
+        switch layoutState {
+        case .collapsed:
+            size = collapsedSize()
+        case .expanded:
+            size = NSSize(
+                width: OverlayMetrics.panelWidth,
+                height: OverlayMetrics.panelHeight
+            )
         }
 
-        let x = screen.frame.midX - width / 2
-        let y = screen.frame.maxY - height
-        let size = NSSize(width: width, height: height)
+        return NSRect(
+            x: screen.frame.midX - size.width / 2,
+            y: screen.frame.maxY - size.height,
+            width: size.width,
+            height: size.height
+        )
+    }
 
-        hostingController.view.frame = NSRect(origin: .zero, size: size)
+    private func collapsedSize() -> NSSize {
+        let title = store?.notchTitle ?? fallbackTitle
+        let measuringView = NSHostingView(
+            rootView: NotchView(title: title) { _ in }
+        )
+        measuringView.layoutSubtreeIfNeeded()
+        let fittingSize = measuringView.fittingSize
 
-        panel.setFrame(
-            NSRect(origin: NSPoint(x: x, y: y), size: size),
-            display: true
+        return NSSize(
+            width: max(OverlayMetrics.notchMinWidth, fittingSize.width),
+            height: OverlayMetrics.notchHeight
         )
     }
 
     private func expand() {
-        guard !isExpanded else { return }
+        guard store != nil else { return }
+        guard presentationState == .collapsed else { return }
+        guard let collapsedFrame = targetFrame(for: .collapsed),
+              let expandedFrame = targetFrame(for: .expanded) else { return }
 
-        isExpanded = true
-        renderContent(positionIfVisible: true)
+        cancelPendingCollapse()
+        presentationState = .expanding
+        animationGeneration += 1
+        let generation = animationGeneration
+
+        applyPanelFrame(collapsedFrame)
+        renderContent(positionIfVisible: false)
+
+        animatePanel(to: expandedFrame, generation: generation) { [weak self] in
+            guard let self else { return }
+
+            self.presentationState = .expanded
+            self.hostingController.view.frame = NSRect(origin: .zero, size: expandedFrame.size)
+
+            guard self.shouldCollapseAfterExpansion else { return }
+
+            self.shouldCollapseAfterExpansion = false
+            guard !self.panel.frame.contains(NSEvent.mouseLocation) else { return }
+            self.collapse()
+        }
     }
 
     private func collapse() {
-        guard isExpanded else { return }
+        guard presentationState == .expanded else { return }
+        guard let collapsedFrame = targetFrame(for: .collapsed) else { return }
 
-        isExpanded = false
-        renderContent(positionIfVisible: true)
+        cancelPendingCollapse()
+        presentationState = .collapsing
+        animationGeneration += 1
+        let generation = animationGeneration
+
+        animatePanel(to: collapsedFrame, generation: generation) { [weak self] in
+            guard let self else { return }
+
+            self.presentationState = .collapsed
+            self.hostingController.view.frame = NSRect(origin: .zero, size: collapsedFrame.size)
+            self.renderContent(positionIfVisible: false)
+            self.panel.setFrame(collapsedFrame, display: true)
+        }
     }
 
     private func collapseAfterMouseExit() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+        pendingCollapseWorkItem?.cancel()
+
+        let workItem = DispatchWorkItem { [weak self] in
             guard let self else { return }
+            self.pendingCollapseWorkItem = nil
             guard !self.panel.frame.contains(NSEvent.mouseLocation) else { return }
+
+            if self.presentationState == .expanding {
+                self.shouldCollapseAfterExpansion = true
+                return
+            }
+
             self.collapse()
+        }
+
+        pendingCollapseWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + Self.collapseDelay,
+            execute: workItem
+        )
+    }
+
+    private func cancelPendingCollapse() {
+        pendingCollapseWorkItem?.cancel()
+        pendingCollapseWorkItem = nil
+        shouldCollapseAfterExpansion = false
+    }
+
+    private func animatePanel(
+        to targetFrame: NSRect,
+        generation: Int,
+        completion: @escaping @MainActor () -> Void
+    ) {
+        animationTimer?.invalidate()
+
+        let startFrame = panel.frame
+        let startTime = CACurrentMediaTime()
+        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] timer in
+            Task { @MainActor [weak self] in
+                guard let self, self.animationGeneration == generation else {
+                    timer.invalidate()
+                    return
+                }
+
+                let elapsed = CACurrentMediaTime() - startTime
+                let linearProgress = min(1, elapsed / Self.transitionDuration)
+                let easedProgress = Self.easeInOut(linearProgress)
+                let frame = Self.interpolate(
+                    from: startFrame,
+                    to: targetFrame,
+                    progress: easedProgress
+                )
+
+                self.applyPanelFrame(frame)
+
+                guard linearProgress >= 1 else { return }
+
+                timer.invalidate()
+                if self.animationTimer === timer {
+                    self.animationTimer = nil
+                }
+                self.applyPanelFrame(targetFrame)
+                completion()
+            }
+        }
+
+        animationTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func applyPanelFrame(_ frame: NSRect) {
+        hostingController.view.frame = NSRect(origin: .zero, size: frame.size)
+        panel.setFrame(frame, display: true)
+    }
+
+    private static func interpolate(from start: NSRect, to end: NSRect, progress: Double) -> NSRect {
+        let progress = CGFloat(progress)
+
+        return NSRect(
+            x: start.origin.x + (end.origin.x - start.origin.x) * progress,
+            y: start.origin.y + (end.origin.y - start.origin.y) * progress,
+            width: start.width + (end.width - start.width) * progress,
+            height: start.height + (end.height - start.height) * progress
+        )
+    }
+
+    private static func easeInOut(_ progress: Double) -> Double {
+        progress * progress * (3 - 2 * progress)
+    }
+
+    private var shouldShowPanelContent: Bool {
+        switch presentationState {
+        case .collapsed:
+            return false
+        case .expanding, .expanded, .collapsing:
+            return true
+        }
+    }
+
+    private var currentLayoutState: LayoutState {
+        switch presentationState {
+        case .collapsed, .collapsing:
+            return .collapsed
+        case .expanding, .expanded:
+            return .expanded
         }
     }
 }
