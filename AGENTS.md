@@ -24,6 +24,14 @@
 
 - 核心目录结构、代码架构和数据库结构以 `docs/architecture.md` 为全局唯一来源。
 
+## Git规则
+
+- commit message
+	- 除前缀外，核心内容强制中文
+	- `feat: `表示新功能
+	- `fix: `表示Bug Fix
+	- `opt: `表示优化
+
 ## 常用命令
 
 运行测试：
