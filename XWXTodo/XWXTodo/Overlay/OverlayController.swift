@@ -129,7 +129,7 @@ final class OverlayController {
                 }
             )
         } else {
-            let title = store?.notchTitle ?? fallbackTitle
+            let title = store?.collapsedNotchTitle ?? fallbackTitle
             hostingController.rootView = AnyView(
                 NotchView(title: title) { [weak self] isHovering in
                     guard isHovering, self?.store != nil else { return }
@@ -175,7 +175,7 @@ final class OverlayController {
     }
 
     private func collapsedSize() -> NSSize {
-        let title = store?.notchTitle ?? fallbackTitle
+        let title = store?.collapsedNotchTitle ?? fallbackTitle
         let measuringView = NSHostingView(
             rootView: NotchView(title: title) { _ in }
         )

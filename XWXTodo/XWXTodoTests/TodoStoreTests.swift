@@ -15,6 +15,7 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertEqual(store.activeTodos[0].title, "写规格")
         XCTAssertEqual(store.activeTodos[0].status, .pending)
         XCTAssertEqual(store.notchTitle, "XWXTodo")
+        XCTAssertEqual(store.collapsedNotchTitle, "尚有1项待办事项")
     }
 
     func testAddTodoRejectsEmptyTitle() throws {
@@ -23,6 +24,26 @@ final class TodoStoreTests: XCTestCase {
         try store.addTodo(title: "   ")
 
         XCTAssertTrue(store.activeTodos.isEmpty)
+    }
+
+    func testCollapsedNotchTitleShowsDoneMessageWhenNoActiveTodos() throws {
+        let store = try TodoStore(repository: InMemoryTodoRepository(), now: { self.baseDate })
+
+        XCTAssertEqual(store.notchTitle, "XWXTodo")
+        XCTAssertEqual(store.collapsedNotchTitle, "牛!全干完了!")
+    }
+
+    func testCollapsedNotchTitleShowsPendingCountWhenNoDoingTodo() throws {
+        let first = makeTodo(title: "A", sortOrder: 0)
+        let second = makeTodo(title: "B", sortOrder: 1)
+        let completed = makeTodo(title: "C", status: .completed, completedAt: baseDate, sortOrder: 2)
+        let store = try TodoStore(
+            repository: InMemoryTodoRepository(items: [first, second, completed]),
+            now: { self.baseDate }
+        )
+
+        XCTAssertEqual(store.notchTitle, "XWXTodo")
+        XCTAssertEqual(store.collapsedNotchTitle, "尚有2项待办事项")
     }
 
     func testStartingTodoAllowsOnlyOneDoingItem() throws {
@@ -38,6 +59,7 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertEqual(store.activeTodos.filter { $0.status == .doing }.map(\.id), [second])
         XCTAssertEqual(store.activeTodos.first { $0.id == first }?.status, .pending)
         XCTAssertEqual(store.notchTitle, "B")
+        XCTAssertEqual(store.collapsedNotchTitle, "B")
     }
 
     func testCompleteTodoMovesItToCompletedList() throws {
@@ -50,6 +72,7 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertTrue(store.activeTodos.isEmpty)
         XCTAssertEqual(store.completedTodos.map(\.title), ["A"])
         XCTAssertEqual(store.completedTodos[0].completedAt, baseDate)
+        XCTAssertEqual(store.collapsedNotchTitle, "牛!全干完了!")
     }
 
     func testDeleteDoesNotDeleteCompletedTodos() throws {
@@ -135,6 +158,7 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertEqual(store.completedTodos[0].status, .completed)
         XCTAssertNil(store.doingTodo)
         XCTAssertEqual(store.notchTitle, "XWXTodo")
+        XCTAssertEqual(store.collapsedNotchTitle, "牛!全干完了!")
     }
 
     func testCompleteTodoDoesNotMutateCompletedItem() throws {

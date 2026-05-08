@@ -41,6 +41,19 @@ final class TodoStore: ObservableObject {
         doingTodo?.title ?? "XWXTodo"
     }
 
+    var collapsedNotchTitle: String {
+        if let doingTodo {
+            return doingTodo.title
+        }
+
+        let pendingCount = todos.filter { $0.status == .pending }.count
+        if pendingCount > 0 {
+            return "尚有\(pendingCount)项待办事项"
+        }
+
+        return "牛!全干完了!"
+    }
+
     func reload() throws {
         do {
             todos = try repository.loadAll()
