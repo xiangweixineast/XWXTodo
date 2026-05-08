@@ -18,8 +18,8 @@ struct NotchView: View {
                 UnevenRoundedRectangle(
                     cornerRadii: .init(
                         topLeading: 0,
-                        bottomLeading: 18,
-                        bottomTrailing: 18,
+                        bottomLeading: OverlayMetrics.notchCornerRadius,
+                        bottomTrailing: OverlayMetrics.notchCornerRadius,
                         topTrailing: 0
                     )
                 )

@@ -30,6 +30,16 @@ struct TodoPanelView: View {
         .padding(.bottom, 14)
         .frame(width: OverlayMetrics.panelWidth, height: OverlayMetrics.panelHeight)
         .background(Color.black)
+        .clipShape(
+            UnevenRoundedRectangle(
+                cornerRadii: .init(
+                    topLeading: 0,
+                    bottomLeading: OverlayMetrics.notchCornerRadius,
+                    bottomTrailing: OverlayMetrics.notchCornerRadius,
+                    topTrailing: 0
+                )
+            )
+        )
         .foregroundStyle(.white)
         .onHover(perform: onHoverChanged)
     }
