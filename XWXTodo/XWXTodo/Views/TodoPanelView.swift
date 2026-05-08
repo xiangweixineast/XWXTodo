@@ -57,6 +57,8 @@ struct TodoPanelView: View {
             TextField("New TODO", text: $newTitle)
                 .textFieldStyle(.roundedBorder)
                 .font(.system(size: 13))
+                .colorScheme(.light)
+                .foregroundStyle(.black)
                 .onSubmit(addTodo)
 
             Button("Add", action: addTodo)

@@ -33,6 +33,8 @@ struct TodoRowView: View {
                 TextField("Title", text: $draftTitle)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 13))
+                    .colorScheme(.light)
+                    .foregroundStyle(.black)
                     .onSubmit(saveEdit)
 
                 Button("Save", action: saveEdit)
