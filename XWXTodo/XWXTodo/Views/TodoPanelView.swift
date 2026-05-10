@@ -10,8 +10,6 @@ struct TodoPanelView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            header
-
             if let message = localError ?? store.errorMessage {
                 ErrorBannerView(message: message)
             }
@@ -42,24 +40,6 @@ struct TodoPanelView: View {
         )
         .foregroundStyle(.white)
         .onHover(perform: onHoverChanged)
-    }
-
-    private var header: some View {
-        HStack(spacing: 10) {
-            Text(store.notchTitle)
-                .font(.system(size: 14, weight: .semibold))
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            Text("Now")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.black)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(.white, in: Capsule())
-        }
-        .frame(height: 36)
     }
 
     private var addTodoBar: some View {

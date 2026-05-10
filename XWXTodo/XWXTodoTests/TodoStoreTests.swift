@@ -14,7 +14,6 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertEqual(store.activeTodos.count, 1)
         XCTAssertEqual(store.activeTodos[0].title, "写规格")
         XCTAssertEqual(store.activeTodos[0].status, .pending)
-        XCTAssertEqual(store.notchTitle, "XWXTodo")
         XCTAssertEqual(store.collapsedNotchTitle, "尚有1项待办事项")
     }
 
@@ -29,7 +28,6 @@ final class TodoStoreTests: XCTestCase {
     func testCollapsedNotchTitleShowsDoneMessageWhenNoActiveTodos() throws {
         let store = try TodoStore(repository: InMemoryTodoRepository(), now: { self.baseDate })
 
-        XCTAssertEqual(store.notchTitle, "XWXTodo")
         XCTAssertEqual(store.collapsedNotchTitle, "牛!全干完了!")
     }
 
@@ -42,7 +40,6 @@ final class TodoStoreTests: XCTestCase {
             now: { self.baseDate }
         )
 
-        XCTAssertEqual(store.notchTitle, "XWXTodo")
         XCTAssertEqual(store.collapsedNotchTitle, "尚有2项待办事项")
     }
 
@@ -58,7 +55,6 @@ final class TodoStoreTests: XCTestCase {
 
         XCTAssertEqual(store.activeTodos.filter { $0.status == .doing }.map(\.id), [second])
         XCTAssertEqual(store.activeTodos.first { $0.id == first }?.status, .pending)
-        XCTAssertEqual(store.notchTitle, "B")
         XCTAssertEqual(store.collapsedNotchTitle, "B")
     }
 
@@ -74,7 +70,6 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertEqual(reloaded.status, .pending)
         XCTAssertEqual(reloaded.updatedAt, pausedAt)
         XCTAssertNil(store.doingTodo)
-        XCTAssertEqual(store.notchTitle, "XWXTodo")
         XCTAssertEqual(store.collapsedNotchTitle, "尚有1项待办事项")
     }
 
@@ -199,7 +194,6 @@ final class TodoStoreTests: XCTestCase {
 
         XCTAssertEqual(store.completedTodos[0].status, .completed)
         XCTAssertNil(store.doingTodo)
-        XCTAssertEqual(store.notchTitle, "XWXTodo")
         XCTAssertEqual(store.collapsedNotchTitle, "牛!全干完了!")
     }
 

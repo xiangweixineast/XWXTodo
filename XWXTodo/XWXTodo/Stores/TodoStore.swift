@@ -37,10 +37,6 @@ final class TodoStore: ObservableObject {
         activeTodos.first { $0.status == .doing }
     }
 
-    var notchTitle: String {
-        doingTodo?.title ?? "XWXTodo"
-    }
-
     var collapsedNotchTitle: String {
         if let doingTodo {
             return doingTodo.title
