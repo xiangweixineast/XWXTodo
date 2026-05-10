@@ -132,6 +132,18 @@ final class TodoStore: ObservableObject {
         }
     }
 
+    func pauseTodo(id: UUID) throws {
+        guard todos.contains(where: { $0.id == id && $0.status == .doing }) else { return }
+
+        do {
+            try repository.setPending(id: id, updatedAt: now())
+            try reload()
+        } catch {
+            errorMessage = error.localizedDescription
+            throw error
+        }
+    }
+
     func completeTodo(id: UUID) throws {
         guard todos.contains(where: { $0.id == id && $0.status != .completed }) else { return }
 

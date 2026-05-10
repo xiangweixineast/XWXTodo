@@ -62,6 +62,48 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertEqual(store.collapsedNotchTitle, "B")
     }
 
+    func testPauseTodoMovesDoingItemBackToPending() throws {
+        let pausedAt = baseDate.addingTimeInterval(10)
+        let id = UUID()
+        let doing = makeTodo(id: id, title: "A", status: .doing)
+        let store = try TodoStore(repository: InMemoryTodoRepository(items: [doing]), now: { pausedAt })
+
+        try store.pauseTodo(id: id)
+
+        let reloaded = try XCTUnwrap(store.activeTodos.first { $0.id == id })
+        XCTAssertEqual(reloaded.status, .pending)
+        XCTAssertEqual(reloaded.updatedAt, pausedAt)
+        XCTAssertNil(store.doingTodo)
+        XCTAssertEqual(store.notchTitle, "XWXTodo")
+        XCTAssertEqual(store.collapsedNotchTitle, "尚有1项待办事项")
+    }
+
+    func testPauseTodoDoesNotMutatePendingOrCompletedItems() throws {
+        let pendingID = UUID()
+        let completedID = UUID()
+        let pending = makeTodo(id: pendingID, title: "Pending", updatedAt: baseDate)
+        let completed = makeTodo(
+            id: completedID,
+            title: "Done",
+            status: .completed,
+            updatedAt: baseDate,
+            completedAt: baseDate
+        )
+        let store = try TodoStore(
+            repository: InMemoryTodoRepository(items: [pending, completed]),
+            now: { self.baseDate.addingTimeInterval(10) }
+        )
+
+        try store.pauseTodo(id: pendingID)
+        try store.pauseTodo(id: completedID)
+
+        XCTAssertEqual(store.activeTodos[0].status, .pending)
+        XCTAssertEqual(store.activeTodos[0].updatedAt, baseDate)
+        XCTAssertEqual(store.completedTodos[0].status, .completed)
+        XCTAssertEqual(store.completedTodos[0].updatedAt, baseDate)
+        XCTAssertEqual(store.completedTodos[0].completedAt, baseDate)
+    }
+
     func testCompleteTodoMovesItToCompletedList() throws {
         let store = try TodoStore(repository: InMemoryTodoRepository(), now: { self.baseDate })
         try store.addTodo(title: "A")

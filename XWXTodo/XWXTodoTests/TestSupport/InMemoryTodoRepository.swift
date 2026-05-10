@@ -36,6 +36,12 @@ final class InMemoryTodoRepository: TodoRepository {
         items[index].updatedAt = updatedAt
     }
 
+    func setPending(id: UUID, updatedAt: Date) throws {
+        guard let index = items.firstIndex(where: { $0.id == id && $0.status == .doing }) else { return }
+        items[index].status = .pending
+        items[index].updatedAt = updatedAt
+    }
+
     func complete(id: UUID, completedAt: Date) throws {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
         items[index].status = .completed

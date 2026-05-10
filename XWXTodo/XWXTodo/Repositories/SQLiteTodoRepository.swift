@@ -127,6 +127,19 @@ final class SQLiteTodoRepository: TodoRepository {
         }
     }
 
+    func setPending(id: UUID, updatedAt: Date) throws {
+        let sql = """
+        UPDATE todos
+        SET status = 'pending', updated_at = ?
+        WHERE id = ? AND status = 'doing';
+        """
+        try withPreparedStatement(sql) { statement in
+            try bindDate(updatedAt, to: statement, at: 1)
+            try bindText(id.uuidString, to: statement, at: 2)
+            try stepDone(statement)
+        }
+    }
+
     func complete(id: UUID, completedAt: Date) throws {
         let sql = """
         UPDATE todos

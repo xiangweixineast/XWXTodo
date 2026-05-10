@@ -3,6 +3,7 @@ import SwiftUI
 struct TodoRowView: View {
     let todo: TodoItem
     let onStart: () -> Void
+    let onPause: () -> Void
     let onDone: () -> Void
     let onEdit: (String) -> Bool
     let onDelete: () -> Void
@@ -13,12 +14,14 @@ struct TodoRowView: View {
     init(
         todo: TodoItem,
         onStart: @escaping () -> Void,
+        onPause: @escaping () -> Void,
         onDone: @escaping () -> Void,
         onEdit: @escaping (String) -> Bool,
         onDelete: @escaping () -> Void
     ) {
         self.todo = todo
         self.onStart = onStart
+        self.onPause = onPause
         self.onDone = onDone
         self.onEdit = onEdit
         self.onDelete = onDelete
@@ -51,7 +54,10 @@ struct TodoRowView: View {
                     .truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                if todo.status != .doing {
+                if todo.status == .doing {
+                    Button("Pause", action: onPause)
+                        .buttonStyle(.bordered)
+                } else {
                     Button("Start", action: onStart)
                         .buttonStyle(.bordered)
                 }

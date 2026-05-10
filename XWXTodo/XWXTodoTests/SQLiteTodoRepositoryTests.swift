@@ -74,6 +74,23 @@ final class SQLiteTodoRepositoryTests: XCTestCase {
         XCTAssertEqual(todos.first { $0.id == first.id }?.status, .pending)
     }
 
+    func testSetPendingMovesDoingTodoBackToPending() throws {
+        let repository = try SQLiteTodoRepository(databaseURL: makeTemporaryDatabaseURL())
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        let pausedAt = date.addingTimeInterval(10)
+        let item = TodoItem(id: UUID(), title: "A", status: .pending, createdAt: date, updatedAt: date, completedAt: nil, sortOrder: 7)
+        try repository.insert(item)
+        try repository.setDoing(id: item.id, updatedAt: date.addingTimeInterval(1))
+
+        try repository.setPending(id: item.id, updatedAt: pausedAt)
+
+        let reloaded = try XCTUnwrap(repository.loadAll().first)
+        XCTAssertEqual(reloaded.status, .pending)
+        XCTAssertEqual(reloaded.updatedAt, pausedAt)
+        XCTAssertNil(reloaded.completedAt)
+        XCTAssertEqual(reloaded.sortOrder, 7)
+    }
+
     func testCompleteWritesCompletedAtAndSortsViaStoreLater() throws {
         let repository = try SQLiteTodoRepository(databaseURL: makeTemporaryDatabaseURL())
         let createdAt = Date(timeIntervalSince1970: 1_800_000_000)

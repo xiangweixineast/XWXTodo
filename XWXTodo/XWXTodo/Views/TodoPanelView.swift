@@ -100,6 +100,11 @@ struct TodoPanelView: View {
                                         try store.startTodo(id: todo.id)
                                     }
                                 },
+                                onPause: {
+                                    perform {
+                                        try store.pauseTodo(id: todo.id)
+                                    }
+                                },
                                 onDone: {
                                     perform {
                                         try store.completeTodo(id: todo.id)
