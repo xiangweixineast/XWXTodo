@@ -68,7 +68,7 @@ XWXTodoApp -> AppState -> SQLiteTodoRepository + TodoStore + OverlayController
 - 视图只调用 `TodoStore`，不直接访问数据库。
 - `TodoStore` 是 TODO 业务规则唯一入口。
 - `TodoStore` 只依赖 `TodoRepository` 协议。
-- `TodoStore` 提供列表排序、doing/pending 状态流转入口和刘海屏显示文案。
+- `TodoStore` 提供列表排序、doing/pending 状态流转入口和收起态刘海屏文案。
 - SQLite 细节只在 `SQLiteTodoRepository`。
 - 覆盖层窗口行为只在 `Overlay/`。
 - `OverlayController` 持有 `OverlayPanel` 和 `NSHostingController<AnyView>`。
