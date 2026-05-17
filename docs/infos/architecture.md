@@ -39,7 +39,7 @@ XWXTodo/
 | `Repositories/` | 持久化接口和 SQLite 实现 |
 | `Overlay/` | AppKit 覆盖层窗口 |
 | `Views/` | SwiftUI 界面 |
-| `server/app/` | FastAPI 服务端入口、配置读取和数据库连接 |
+| `server/app/` | FastAPI 服务端入口、配置读取、数据库连接、表定义和迁移入口 |
 | `server/tests/` | 服务端 pytest 测试 |
 
 ## 2. 代码架构
@@ -74,6 +74,12 @@ XWXTodoApp -> AppState -> SQLiteTodoRepository + TodoStore + OverlayController
 GET /health -> FastAPI -> SQLAlchemy -> MySQL
 ```
 
+服务端迁移方向：
+
+```text
+python -m app.migrate -> Settings -> SQLAlchemy MetaData -> MySQL
+```
+
 核心边界：
 
 - 视图只调用 `TodoStore`，不直接访问数据库。
@@ -90,10 +96,12 @@ GET /health -> FastAPI -> SQLAlchemy -> MySQL
 - 服务端配置从 `XWXTODO_` 环境变量或 `server/.env` 读取。
 - 服务端当前只提供 `GET /health`。
 - 服务端数据库层只封装 SQLAlchemy engine 和 `SELECT 1` 连通性检查。
+- 服务端表结构由 `app/schema.py` 的 SQLAlchemy Core `metadata` 定义。
+- 服务端迁移通过 `python -m app.migrate` 显式执行，服务启动不自动建表。
 
 ## 3. 数据库结构
 
-数据库文件：
+本地 SQLite 数据库文件：
 
 ```text
 ~/Library/Application Support/XWXTodo/xwxtodo.sqlite
@@ -125,4 +133,51 @@ pending | doing | completed
 CREATE UNIQUE INDEX IF NOT EXISTS idx_todos_single_doing
 ON todos(status)
 WHERE status = 'doing';
+```
+
+服务端 MySQL 表：
+
+```sql
+CREATE TABLE users (
+  id CHAR(36) PRIMARY KEY NOT NULL,
+  username VARCHAR(191) COLLATE utf8mb4_bin NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  current_revision BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  created_at DATETIME(6) NOT NULL,
+  updated_at DATETIME(6) NOT NULL
+) ENGINE = InnoDB CHARSET = utf8mb4;
+
+CREATE TABLE session_tokens (
+  id CHAR(36) PRIMARY KEY NOT NULL,
+  user_id CHAR(36) NOT NULL,
+  token_hash CHAR(64) NOT NULL UNIQUE,
+  created_at DATETIME(6) NOT NULL,
+  expires_at DATETIME(6) NOT NULL,
+  revoked_at DATETIME(6),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE = InnoDB CHARSET = utf8mb4;
+
+CREATE TABLE todos (
+  id CHAR(36) PRIMARY KEY NOT NULL,
+  user_id CHAR(36) NOT NULL,
+  title VARCHAR(500) NOT NULL,
+  status ENUM('pending', 'doing', 'completed') NOT NULL,
+  created_at DATETIME(6) NOT NULL,
+  updated_at DATETIME(6) NOT NULL,
+  completed_at DATETIME(6),
+  sort_order BIGINT NOT NULL,
+  doing_user_id CHAR(36)
+    GENERATED ALWAYS AS (
+      CASE WHEN status = 'doing' THEN user_id ELSE NULL END
+    ) STORED,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE = InnoDB CHARSET = utf8mb4;
+```
+
+服务端索引：
+
+```sql
+CREATE INDEX ix_session_tokens_user_id ON session_tokens(user_id);
+CREATE INDEX ix_todos_user_id_sort_order ON todos(user_id, sort_order);
+CREATE UNIQUE INDEX uq_todos_single_doing_per_user ON todos(doing_user_id);
 ```
