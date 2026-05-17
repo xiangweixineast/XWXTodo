@@ -17,14 +17,17 @@
 ```text
 XWXTodo/
 ├── XWXTodo.xcodeproj
-└── XWXTodo/
-    ├── XWXTodoApp.swift
-    ├── ContentView.swift
-    ├── Models/
-    ├── Stores/
-    ├── Repositories/
-    ├── Overlay/
-    └── Views/
+├── XWXTodo/
+│   ├── XWXTodoApp.swift
+│   ├── ContentView.swift
+│   ├── Models/
+│   ├── Stores/
+│   ├── Repositories/
+│   ├── Overlay/
+│   └── Views/
+└── server/
+    ├── app/
+    └── tests/
 ```
 
 核心目录职责：
@@ -36,6 +39,8 @@ XWXTodo/
 | `Repositories/` | 持久化接口和 SQLite 实现 |
 | `Overlay/` | AppKit 覆盖层窗口 |
 | `Views/` | SwiftUI 界面 |
+| `server/app/` | FastAPI 服务端入口、配置读取和数据库连接 |
+| `server/tests/` | 服务端 pytest 测试 |
 
 ## 2. 代码架构
 
@@ -63,6 +68,12 @@ collapsed -> expanding -> expanded -> collapsing -> collapsed
 XWXTodoApp -> AppState -> SQLiteTodoRepository + TodoStore + OverlayController
 ```
 
+服务端健康检查方向：
+
+```text
+GET /health -> FastAPI -> SQLAlchemy -> MySQL
+```
+
 核心边界：
 
 - 视图只调用 `TodoStore`，不直接访问数据库。
@@ -76,6 +87,9 @@ XWXTodoApp -> AppState -> SQLiteTodoRepository + TodoStore + OverlayController
 - 展开态 frame 固定为 `OverlayMetrics.panelWidth` x `OverlayMetrics.panelHeight`。
 - 悬停展开和离开收回通过 `Timer` 以约 60fps 插值 `NSPanel` frame；屏幕参数变化和显示覆盖层时直接定位。
 - 展开和收回期间保持 `TodoPanelView` 内容，收回动画结束后切回 `NotchView`。
+- 服务端配置从 `XWXTODO_` 环境变量或 `server/.env` 读取。
+- 服务端当前只提供 `GET /health`。
+- 服务端数据库层只封装 SQLAlchemy engine 和 `SELECT 1` 连通性检查。
 
 ## 3. 数据库结构
 
