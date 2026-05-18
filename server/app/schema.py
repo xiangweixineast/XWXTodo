@@ -1,7 +1,12 @@
-from sqlalchemy import Column, Computed, ForeignKey, Index, MetaData, Table, text
+from sqlalchemy import Column, Computed, Enum, ForeignKey, Index, MetaData, Table, text
 from sqlalchemy.dialects import mysql
 
 TODO_STATUS_VALUES = ("pending", "doing", "completed")
+# MySQL 保持原生 ENUM；SQLite 测试使用可编译的字符串枚举。
+todo_status_type = Enum(
+    *TODO_STATUS_VALUES,
+    native_enum=False,
+).with_variant(mysql.ENUM(*TODO_STATUS_VALUES), "mysql")
 
 metadata = MetaData()
 
@@ -57,7 +62,7 @@ todos = Table(
         nullable=False,
     ),
     Column("title", mysql.VARCHAR(500), nullable=False),
-    Column("status", mysql.ENUM(*TODO_STATUS_VALUES), nullable=False),
+    Column("status", todo_status_type, nullable=False),
     Column("created_at", mysql.DATETIME(fsp=6), nullable=False),
     Column("updated_at", mysql.DATETIME(fsp=6), nullable=False),
     Column("completed_at", mysql.DATETIME(fsp=6), nullable=True),
