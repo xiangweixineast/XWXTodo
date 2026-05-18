@@ -1,0 +1,17 @@
+[Unit]
+Description=XWXTodo Sync API
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/xwxtodo/server
+EnvironmentFile=/etc/xwxtodo/xwxtodo.env
+ExecStart=/opt/xwxtodo/server/.venv/bin/python -m app.main
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

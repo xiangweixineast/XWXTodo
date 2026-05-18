@@ -50,13 +50,12 @@ def test_todos_table_shape():
     assert todos.c.created_at.type.fsp == 6
     assert todos.c.updated_at.type.fsp == 6
     assert todos.c.completed_at.nullable is True
-    assert todos.c.doing_user_id.computed.persisted is True
-    assert "CASE WHEN status = 'doing' THEN user_id ELSE NULL END" in str(
-        todos.c.doing_user_id.computed.sqltext
-    )
+    assert todos.c.doing_user_id.type.length == 36
+    assert todos.c.doing_user_id.nullable is True
+    assert todos.c.doing_user_id.computed is None
 
 
-def test_todos_mysql_ddl_contains_generated_single_doing_column():
+def test_todos_mysql_ddl_contains_single_doing_column():
     table_sql = mysql_statement(CreateTable(todos))
     index_sql = "\n".join(
         mysql_statement(CreateIndex(index))
@@ -65,10 +64,8 @@ def test_todos_mysql_ddl_contains_generated_single_doing_column():
     )
 
     assert "status ENUM('pending','doing','completed') NOT NULL" in table_sql
-    assert (
-        "doing_user_id CHAR(36) GENERATED ALWAYS AS "
-        "(CASE WHEN status = 'doing' THEN user_id ELSE NULL END) STORED"
-    ) in table_sql
+    assert "doing_user_id CHAR(36)" in table_sql
+    assert "GENERATED ALWAYS" not in table_sql
     assert (
         "CREATE UNIQUE INDEX uq_todos_single_doing_per_user "
         "ON todos (doing_user_id)"

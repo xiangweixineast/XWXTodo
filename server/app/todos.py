@@ -78,6 +78,7 @@ class TodoService:
                     updated_at=now,
                     completed_at=None,
                     sort_order=sort_order,
+                    doing_user_id=None,
                 )
             )
 
@@ -148,12 +149,21 @@ class TodoService:
                     todos.c.user_id == user_id,
                     todos.c.status == DOING_STATUS,
                 )
-                .values(status=PENDING_STATUS, updated_at=now)
+                .values(
+                    status=PENDING_STATUS,
+                    updated_at=now,
+                    doing_user_id=None,
+                )
             )
             connection.execute(
                 update(todos)
                 .where(todos.c.id == todo_id, todos.c.user_id == user_id)
-                .values(status=DOING_STATUS, updated_at=now, completed_at=None)
+                .values(
+                    status=DOING_STATUS,
+                    updated_at=now,
+                    completed_at=None,
+                    doing_user_id=user_id,
+                )
             )
 
             revision = self._bump_revision(
@@ -174,7 +184,11 @@ class TodoService:
             connection.execute(
                 update(todos)
                 .where(todos.c.id == todo_id, todos.c.user_id == user_id)
-                .values(status=PENDING_STATUS, updated_at=now)
+                .values(
+                    status=PENDING_STATUS,
+                    updated_at=now,
+                    doing_user_id=None,
+                )
             )
 
             revision = self._bump_revision(
@@ -199,6 +213,7 @@ class TodoService:
                     status=COMPLETED_STATUS,
                     updated_at=now,
                     completed_at=now,
+                    doing_user_id=None,
                 )
             )
 

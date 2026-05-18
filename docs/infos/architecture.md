@@ -25,6 +25,7 @@ XWXTodo/
 │   └── XWXTodoTests/
 ├── server/
 │   ├── app/
+│   ├── deploy/
 │   └── tests/
 └── docs/infos/
 ```
@@ -38,6 +39,7 @@ XWXTodo/
 | `XWXTodo/XWXTodo/Views/` | SwiftUI 界面 |
 | `XWXTodo/XWXTodoTests/` | macOS 客户端测试 |
 | `server/app/` | FastAPI 服务、配置、数据库连接、表定义、迁移、认证、TODO API 和后台账号管理 |
+| `server/deploy/` | systemd、Nginx 部署模板和部署说明 |
 | `server/tests/` | 服务端测试 |
 | `docs/infos/` | 当前功能和架构信息文档 |
 

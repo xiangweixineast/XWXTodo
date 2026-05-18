@@ -49,7 +49,7 @@ def test_run_migrations_against_mysql_when_configured():
             create_table_sql = connection.execute(text("SHOW CREATE TABLE todos")).one()[1]
 
         assert "doing_user_id" in create_table_sql
-        assert "GENERATED ALWAYS" in create_table_sql.upper()
+        assert "GENERATED ALWAYS" not in create_table_sql.upper()
     finally:
         metadata.drop_all(engine)
         engine.dispose()

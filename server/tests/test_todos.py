@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 from app.accounts import create_user
 from app.api import create_app
 from app.config import Settings
-from app.schema import metadata, users
+from app.schema import metadata, todos, users
 
 
 @pytest.fixture
@@ -138,7 +138,7 @@ def test_delete_todo_removes_active_todo_and_increments_revision(todos_context):
 
 def test_start_todo_allows_only_one_doing_per_account(todos_context):
     client, engine = todos_context
-    _alice_id, alice_token = _create_user_session(client, engine, "alice")
+    alice_id, alice_token = _create_user_session(client, engine, "alice")
     _bob_id, bob_token = _create_user_session(client, engine, "bob")
     first_id = _only_todo(_create_todo(client, alice_token, "A"))["id"]
     second_id = _create_todo(client, alice_token, "B")["todos"][1]["id"]
@@ -161,6 +161,10 @@ def test_start_todo_allows_only_one_doing_per_account(todos_context):
         first_id: "pending",
         second_id: "doing",
     }
+    assert _doing_user_ids(engine, alice_id) == {
+        first_id: None,
+        second_id: alice_id,
+    }
 
     bob_response = client.get("/todos", headers=_auth_header(bob_token))
     assert bob_response.status_code == 200
@@ -181,6 +185,7 @@ def test_pause_todo_requires_doing_and_increments_revision(todos_context):
     assert body["revision"] == 3
     assert _fetch_revision(engine, user_id) == 3
     assert _only_todo(body)["status"] == "pending"
+    assert _doing_user_ids(engine, user_id) == {todo_id: None}
 
 
 def test_complete_todo_sets_completed_at_and_revision(todos_context):
@@ -352,3 +357,17 @@ def _only_todo(snapshot: dict) -> dict:
 
 def _status_by_id(snapshot: dict) -> dict[str, str]:
     return {todo["id"]: todo["status"] for todo in snapshot["todos"]}
+
+
+def _doing_user_ids(engine, user_id: str) -> dict:
+    with engine.connect() as connection:
+        rows = (
+            connection.execute(
+                select(todos.c.id, todos.c.doing_user_id).where(
+                    todos.c.user_id == user_id
+                )
+            )
+            .mappings()
+            .all()
+        )
+    return {row["id"]: row["doing_user_id"] for row in rows}

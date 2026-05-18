@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Computed, Enum, ForeignKey, Index, MetaData, Table, text
+from sqlalchemy import Column, Enum, ForeignKey, Index, MetaData, Table, text
 from sqlalchemy.dialects import mysql
 
 TODO_STATUS_VALUES = ("pending", "doing", "completed")
@@ -67,15 +67,8 @@ todos = Table(
     Column("updated_at", mysql.DATETIME(fsp=6), nullable=False),
     Column("completed_at", mysql.DATETIME(fsp=6), nullable=True),
     Column("sort_order", mysql.BIGINT, nullable=False),
-    Column(
-        "doing_user_id",
-        mysql.CHAR(36),
-        Computed(
-            "CASE WHEN status = 'doing' THEN user_id ELSE NULL END",
-            persisted=True,
-        ),
-        nullable=True,
-    ),
+    # 由服务层维护，配合唯一索引保证同账号同一时间只有一个 doing。
+    Column("doing_user_id", mysql.CHAR(36), nullable=True),
     mysql_charset="utf8mb4",
     mysql_engine="InnoDB",
 )
