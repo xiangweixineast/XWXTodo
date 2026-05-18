@@ -1,6 +1,6 @@
 # XWXTodo Sync Server
 
-服务端使用 FastAPI + MySQL，当前只包含基础配置、数据库连通性检查和测试框架。
+服务端使用 FastAPI + MySQL，包含基础配置、数据库连通性检查、表迁移和后台账号管理。
 
 ## 本地安装
 
@@ -31,6 +31,16 @@ cd server
 source .venv/bin/activate
 python -m app.main
 ```
+
+## 后台创建账号
+
+```bash
+cd server
+source .venv/bin/activate
+python -m app.admin create-user <username>
+```
+
+密码通过终端隐藏输入并二次确认；数据库只保存密码哈希。
 
 ## 健康检查
 

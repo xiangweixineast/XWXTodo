@@ -37,7 +37,7 @@ XWXTodo/
 | `XWXTodo/XWXTodo/Overlay/` | AppKit 顶部覆盖层 |
 | `XWXTodo/XWXTodo/Views/` | SwiftUI 界面 |
 | `XWXTodo/XWXTodoTests/` | macOS 客户端测试 |
-| `server/app/` | FastAPI 服务、配置、数据库连接、表定义和迁移入口 |
+| `server/app/` | FastAPI 服务、配置、数据库连接、表定义、迁移和后台账号管理 |
 | `server/tests/` | 服务端测试 |
 | `docs/infos/` | 当前功能和架构信息文档 |
 
@@ -72,6 +72,7 @@ python -m app.main -> Settings -> create_app -> Database
 ```text
 GET /health -> FastAPI -> SQLAlchemy -> MySQL
 python -m app.migrate -> SQLAlchemy MetaData -> MySQL
+python -m app.admin create-user <username> -> SQLAlchemy -> MySQL
 ```
 
 核心边界：
@@ -83,3 +84,4 @@ python -m app.migrate -> SQLAlchemy MetaData -> MySQL
 - 服务端配置统一由 `Settings` 读取。
 - 服务端表结构统一由 `app/schema.py` 定义。
 - 服务端迁移由 `app/migrate.py` 显式执行。
+- 服务端账号只能通过后台脚本创建，数据库只保存密码哈希。
