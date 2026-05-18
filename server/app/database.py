@@ -17,6 +17,10 @@ class Database:
     def __init__(self, settings: Settings) -> None:
         self._engine = create_database_engine(settings.database_url)
 
+    @property
+    def engine(self) -> Engine:
+        return self._engine
+
     def check_health(self) -> None:
         with self._engine.connect() as connection:
             connection.execute(text("SELECT 1"))
