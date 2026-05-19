@@ -1,22 +1,39 @@
 import Foundation
 import Combine
 
+enum TodoStoreError: Error, LocalizedError, Equatable {
+    case signedOut
+
+    var errorDescription: String? {
+        switch self {
+        case .signedOut:
+            return "请先登录云端账号"
+        }
+    }
+}
+
 @MainActor
 final class TodoStore: ObservableObject {
     @Published private(set) var todos: [TodoItem]
     @Published private(set) var errorMessage: String?
+    @Published private(set) var currentRevision: Int?
 
     private let repository: TodoRepository
-    private let now: () -> Date
+    private let cloudTodoClient: CloudTodoClient
+    private let tokenProvider: () -> String?
 
     init(
         repository: TodoRepository,
+        cloudTodoClient: CloudTodoClient = CloudAPIClient(),
+        tokenProvider: @escaping () -> String? = { nil },
         now: @escaping () -> Date = Date.init,
         loadInitialData: Bool = true
     ) throws {
         self.repository = repository
-        self.now = now
+        self.cloudTodoClient = cloudTodoClient
+        self.tokenProvider = tokenProvider
         self.todos = []
+        self.currentRevision = nil
         if loadInitialData {
             try reload()
         }
@@ -66,11 +83,31 @@ final class TodoStore: ObservableObject {
         }
     }
 
-    /// 用云端快照整体替换本地缓存。
+    /// 用云端快照整体替换本地缓存，不更新云端 revision。
     func replaceAll(_ items: [TodoItem]) throws {
         do {
             try repository.replaceAll(items)
             try reload()
+        } catch {
+            errorMessage = error.localizedDescription
+            throw error
+        }
+    }
+
+    /// 应用云端快照，并忽略低于当前版本的旧响应。
+    @discardableResult
+    func applySnapshot(_ snapshot: CloudTodoSnapshot) throws -> Bool {
+        if let currentRevision, snapshot.revision < currentRevision {
+            errorMessage = nil
+            return false
+        }
+
+        do {
+            try repository.replaceAll(snapshot.todoItems())
+            try reload()
+            currentRevision = snapshot.revision
+            errorMessage = nil
+            return true
         } catch {
             errorMessage = error.localizedDescription
             throw error
@@ -82,98 +119,78 @@ final class TodoStore: ObservableObject {
         do {
             try repository.clear()
             try reload()
+            currentRevision = nil
         } catch {
             errorMessage = error.localizedDescription
             throw error
         }
     }
 
-    func addTodo(title: String) throws {
+    func addTodo(title: String) async throws {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty else { return }
 
-        let timestamp = now()
-        let sortOrder = (todos.map(\.sortOrder).max() ?? -1) + 1
-        let item = TodoItem(
-            id: UUID(),
-            title: trimmedTitle,
-            status: .pending,
-            createdAt: timestamp,
-            updatedAt: timestamp,
-            completedAt: nil,
-            sortOrder: sortOrder
-        )
-
-        do {
-            try repository.insert(item)
-            try reload()
-        } catch {
-            errorMessage = error.localizedDescription
-            throw error
+        try await performCloudMutation { client, token in
+            try await client.addTodo(title: trimmedTitle, token: token)
         }
     }
 
-    func editTodo(id: UUID, title: String) throws {
+    func editTodo(id: UUID, title: String) async throws {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty else { return }
-        guard var item = todos.first(where: { $0.id == id }) else { return }
-        guard item.status != .completed else { return }
-
-        item.title = trimmedTitle
-        item.updatedAt = now()
-
-        do {
-            try repository.update(item)
-            try reload()
-        } catch {
-            errorMessage = error.localizedDescription
-            throw error
-        }
-    }
-
-    func deleteTodo(id: UUID) throws {
         guard let item = todos.first(where: { $0.id == id }) else { return }
         guard item.status != .completed else { return }
 
-        do {
-            try repository.delete(id: id)
-            try reload()
-        } catch {
-            errorMessage = error.localizedDescription
-            throw error
+        try await performCloudMutation { client, token in
+            try await client.editTodo(id: id, title: trimmedTitle, token: token)
         }
     }
 
-    func startTodo(id: UUID) throws {
+    func deleteTodo(id: UUID) async throws {
+        guard let item = todos.first(where: { $0.id == id }) else { return }
+        guard item.status != .completed else { return }
+
+        try await performCloudMutation { client, token in
+            try await client.deleteTodo(id: id, token: token)
+        }
+    }
+
+    func startTodo(id: UUID) async throws {
         guard todos.contains(where: { $0.id == id && $0.status != .completed }) else { return }
 
-        do {
-            try repository.setDoing(id: id, updatedAt: now())
-            try reload()
-        } catch {
-            errorMessage = error.localizedDescription
-            throw error
+        try await performCloudMutation { client, token in
+            try await client.startTodo(id: id, token: token)
         }
     }
 
-    func pauseTodo(id: UUID) throws {
+    func pauseTodo(id: UUID) async throws {
         guard todos.contains(where: { $0.id == id && $0.status == .doing }) else { return }
 
-        do {
-            try repository.setPending(id: id, updatedAt: now())
-            try reload()
-        } catch {
-            errorMessage = error.localizedDescription
-            throw error
+        try await performCloudMutation { client, token in
+            try await client.pauseTodo(id: id, token: token)
         }
     }
 
-    func completeTodo(id: UUID) throws {
+    func completeTodo(id: UUID) async throws {
         guard todos.contains(where: { $0.id == id && $0.status != .completed }) else { return }
 
+        try await performCloudMutation { client, token in
+            try await client.completeTodo(id: id, token: token)
+        }
+    }
+
+    private func performCloudMutation(
+        _ operation: (CloudTodoClient, String) async throws -> CloudTodoSnapshot
+    ) async throws {
+        guard let token = tokenProvider() else {
+            errorMessage = TodoStoreError.signedOut.localizedDescription
+            throw TodoStoreError.signedOut
+        }
+
         do {
-            try repository.complete(id: id, completedAt: now())
-            try reload()
+            let snapshot = try await operation(cloudTodoClient, token)
+            try applySnapshot(snapshot)
+            errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
             throw error

@@ -4,29 +4,141 @@ import XCTest
 @MainActor
 final class TodoStoreTests: XCTestCase {
     private let baseDate = Date(timeIntervalSince1970: 1_800_000_000)
+    private let token = "cloud-token"
 
-    func testAddTodoTrimsTitleAndAppendsPendingItem() throws {
-        let repository = InMemoryTodoRepository()
-        let store = try TodoStore(repository: repository, now: { self.baseDate })
+    func testAddTodoTrimsTitleAndAppliesCloudSnapshot() async throws {
+        let cloudItem = makeTodo(title: "写规格", sortOrder: 3)
+        let client = FakeCloudTodoClient()
+        client.results = [.success(makeSnapshot(items: [cloudItem], revision: 2))]
+        let (store, repository, _) = try makeCloudStore(client: client)
 
-        try store.addTodo(title: "  写规格  ")
+        try await store.addTodo(title: "  写规格  ")
 
-        XCTAssertEqual(store.activeTodos.count, 1)
-        XCTAssertEqual(store.activeTodos[0].title, "写规格")
-        XCTAssertEqual(store.activeTodos[0].status, .pending)
+        XCTAssertEqual(client.calls, [.add(title: "写规格", token: token)])
+        XCTAssertEqual(store.activeTodos, [cloudItem])
+        XCTAssertEqual(try repository.loadAll(), [cloudItem])
+        XCTAssertEqual(store.currentRevision, 2)
         XCTAssertEqual(store.collapsedNotchTitle, "尚有1项待办事项")
     }
 
-    func testAddTodoRejectsEmptyTitle() throws {
-        let store = try TodoStore(repository: InMemoryTodoRepository(), now: { self.baseDate })
+    func testAddTodoRejectsEmptyTitleWithoutCallingCloud() async throws {
+        let existing = makeTodo(title: "Old")
+        let client = FakeCloudTodoClient()
+        let (store, repository, _) = try makeCloudStore(initialTodos: [existing], client: client)
 
-        try store.addTodo(title: "   ")
+        try await store.addTodo(title: "   ")
+
+        XCTAssertTrue(client.calls.isEmpty)
+        XCTAssertEqual(store.activeTodos, [existing])
+        XCTAssertEqual(try repository.loadAll(), [existing])
+    }
+
+    func testTodoOperationWithoutTokenFailsAndDoesNotMutateLocalState() async throws {
+        let existing = makeTodo(title: "Old")
+        let client = FakeCloudTodoClient()
+        let (store, repository, _) = try makeCloudStore(initialTodos: [existing], token: nil, client: client)
+
+        do {
+            try await store.addTodo(title: "New")
+            XCTFail("Expected signed out error")
+        } catch let error as TodoStoreError {
+            XCTAssertEqual(error, .signedOut)
+        }
+
+        XCTAssertTrue(client.calls.isEmpty)
+        XCTAssertEqual(store.activeTodos, [existing])
+        XCTAssertEqual(try repository.loadAll(), [existing])
+        XCTAssertEqual(store.errorMessage, "请先登录云端账号")
+    }
+
+    func testTodoOperationFailureDoesNotMutateLocalState() async throws {
+        let existing = makeTodo(title: "Old")
+        let client = FakeCloudTodoClient()
+        client.results = [.failure(CloudAPIError.transport("offline"))]
+        let (store, repository, _) = try makeCloudStore(initialTodos: [existing], client: client)
+
+        do {
+            try await store.editTodo(id: existing.id, title: "Changed")
+            XCTFail("Expected cloud error")
+        } catch let error as CloudAPIError {
+            XCTAssertEqual(error, .transport("offline"))
+        }
+
+        XCTAssertEqual(client.calls, [.edit(id: existing.id, title: "Changed", token: token)])
+        XCTAssertEqual(store.activeTodos, [existing])
+        XCTAssertEqual(try repository.loadAll(), [existing])
+        XCTAssertNil(store.currentRevision)
+        XCTAssertEqual(store.errorMessage, "网络请求失败：offline")
+    }
+
+    func testTodoMutationsUseCloudAndApplyReturnedSnapshots() async throws {
+        let firstID = UUID()
+        let secondID = UUID()
+        let first = makeTodo(id: firstID, title: "A")
+        let edited = makeTodo(id: firstID, title: "B")
+        let doing = makeTodo(id: firstID, title: "B", status: .doing)
+        let pending = makeTodo(id: firstID, title: "B")
+        let second = makeTodo(id: secondID, title: "C")
+        let completed = makeTodo(id: secondID, title: "C", status: .completed, completedAt: baseDate)
+        let client = FakeCloudTodoClient()
+        client.results = [
+            .success(makeSnapshot(items: [edited], revision: 1)),
+            .success(makeSnapshot(items: [doing], revision: 2)),
+            .success(makeSnapshot(items: [pending], revision: 3)),
+            .success(makeSnapshot(items: [second], revision: 4)),
+            .success(makeSnapshot(items: [completed], revision: 5)),
+        ]
+        let (store, repository, _) = try makeCloudStore(initialTodos: [first], client: client)
+
+        try await store.editTodo(id: firstID, title: "  B  ")
+        try await store.startTodo(id: firstID)
+        try await store.pauseTodo(id: firstID)
+        try await store.deleteTodo(id: firstID)
+        try await store.completeTodo(id: secondID)
+
+        XCTAssertEqual(
+            client.calls,
+            [
+                .edit(id: firstID, title: "B", token: token),
+                .start(id: firstID, token: token),
+                .pause(id: firstID, token: token),
+                .delete(id: firstID, token: token),
+                .complete(id: secondID, token: token),
+            ]
+        )
+        XCTAssertEqual(store.completedTodos, [completed])
+        XCTAssertEqual(try repository.loadAll(), [completed])
+        XCTAssertEqual(store.currentRevision, 5)
+    }
+
+    func testApplySnapshotIgnoresOlderRevision() throws {
+        let newer = makeTodo(title: "Newer")
+        let older = makeTodo(title: "Older")
+        let store = try TodoStore(repository: InMemoryTodoRepository())
+
+        XCTAssertTrue(try store.applySnapshot(makeSnapshot(items: [newer], revision: 5)))
+        XCTAssertFalse(try store.applySnapshot(makeSnapshot(items: [older], revision: 4)))
+
+        XCTAssertEqual(store.activeTodos, [newer])
+        XCTAssertEqual(store.currentRevision, 5)
+    }
+
+    func testClearRemovesCachedTodosAndRevision() throws {
+        let active = makeTodo(title: "A")
+        let completed = makeTodo(title: "Done", status: .completed, completedAt: baseDate)
+        let store = try TodoStore(repository: InMemoryTodoRepository(items: [active, completed]))
+        try store.applySnapshot(makeSnapshot(items: [active, completed], revision: 8))
+
+        try store.clear()
 
         XCTAssertTrue(store.activeTodos.isEmpty)
+        XCTAssertTrue(store.completedTodos.isEmpty)
+        XCTAssertNil(store.currentRevision)
+        XCTAssertEqual(store.collapsedNotchTitle, "牛!全干完了!")
     }
 
     func testCollapsedNotchTitleShowsDoneMessageWhenNoActiveTodos() throws {
-        let store = try TodoStore(repository: InMemoryTodoRepository(), now: { self.baseDate })
+        let store = try TodoStore(repository: InMemoryTodoRepository())
 
         XCTAssertEqual(store.collapsedNotchTitle, "牛!全干完了!")
     }
@@ -35,151 +147,15 @@ final class TodoStoreTests: XCTestCase {
         let first = makeTodo(title: "A", sortOrder: 0)
         let second = makeTodo(title: "B", sortOrder: 1)
         let completed = makeTodo(title: "C", status: .completed, completedAt: baseDate, sortOrder: 2)
-        let store = try TodoStore(
-            repository: InMemoryTodoRepository(items: [first, second, completed]),
-            now: { self.baseDate }
-        )
+        let store = try TodoStore(repository: InMemoryTodoRepository(items: [first, second, completed]))
 
         XCTAssertEqual(store.collapsedNotchTitle, "尚有2项待办事项")
-    }
-
-    func testReplaceAllUpdatesTodosFromSnapshot() throws {
-        let old = makeTodo(title: "Old")
-        let snapshot = makeTodo(title: "Cloud", sortOrder: 3)
-        let store = try TodoStore(
-            repository: InMemoryTodoRepository(items: [old]),
-            now: { self.baseDate }
-        )
-
-        try store.replaceAll([snapshot])
-
-        XCTAssertEqual(store.activeTodos, [snapshot])
-    }
-
-    func testClearRemovesCachedTodos() throws {
-        let active = makeTodo(title: "A")
-        let completed = makeTodo(title: "Done", status: .completed, completedAt: baseDate)
-        let store = try TodoStore(
-            repository: InMemoryTodoRepository(items: [active, completed]),
-            now: { self.baseDate }
-        )
-
-        try store.clear()
-
-        XCTAssertTrue(store.activeTodos.isEmpty)
-        XCTAssertTrue(store.completedTodos.isEmpty)
-        XCTAssertEqual(store.collapsedNotchTitle, "牛!全干完了!")
-    }
-
-    func testStartingTodoAllowsOnlyOneDoingItem() throws {
-        let store = try TodoStore(repository: InMemoryTodoRepository(), now: { self.baseDate })
-        try store.addTodo(title: "A")
-        try store.addTodo(title: "B")
-        let first = store.activeTodos[0].id
-        let second = store.activeTodos[1].id
-
-        try store.startTodo(id: first)
-        try store.startTodo(id: second)
-
-        XCTAssertEqual(store.activeTodos.filter { $0.status == .doing }.map(\.id), [second])
-        XCTAssertEqual(store.activeTodos.first { $0.id == first }?.status, .pending)
-        XCTAssertEqual(store.collapsedNotchTitle, "B")
-    }
-
-    func testPauseTodoMovesDoingItemBackToPending() throws {
-        let pausedAt = baseDate.addingTimeInterval(10)
-        let id = UUID()
-        let doing = makeTodo(id: id, title: "A", status: .doing)
-        let store = try TodoStore(repository: InMemoryTodoRepository(items: [doing]), now: { pausedAt })
-
-        try store.pauseTodo(id: id)
-
-        let reloaded = try XCTUnwrap(store.activeTodos.first { $0.id == id })
-        XCTAssertEqual(reloaded.status, .pending)
-        XCTAssertEqual(reloaded.updatedAt, pausedAt)
-        XCTAssertNil(store.doingTodo)
-        XCTAssertEqual(store.collapsedNotchTitle, "尚有1项待办事项")
-    }
-
-    func testPauseTodoDoesNotMutatePendingOrCompletedItems() throws {
-        let pendingID = UUID()
-        let completedID = UUID()
-        let pending = makeTodo(id: pendingID, title: "Pending", updatedAt: baseDate)
-        let completed = makeTodo(
-            id: completedID,
-            title: "Done",
-            status: .completed,
-            updatedAt: baseDate,
-            completedAt: baseDate
-        )
-        let store = try TodoStore(
-            repository: InMemoryTodoRepository(items: [pending, completed]),
-            now: { self.baseDate.addingTimeInterval(10) }
-        )
-
-        try store.pauseTodo(id: pendingID)
-        try store.pauseTodo(id: completedID)
-
-        XCTAssertEqual(store.activeTodos[0].status, .pending)
-        XCTAssertEqual(store.activeTodos[0].updatedAt, baseDate)
-        XCTAssertEqual(store.completedTodos[0].status, .completed)
-        XCTAssertEqual(store.completedTodos[0].updatedAt, baseDate)
-        XCTAssertEqual(store.completedTodos[0].completedAt, baseDate)
-    }
-
-    func testCompleteTodoMovesItToCompletedList() throws {
-        let store = try TodoStore(repository: InMemoryTodoRepository(), now: { self.baseDate })
-        try store.addTodo(title: "A")
-        let id = store.activeTodos[0].id
-
-        try store.completeTodo(id: id)
-
-        XCTAssertTrue(store.activeTodos.isEmpty)
-        XCTAssertEqual(store.completedTodos.map(\.title), ["A"])
-        XCTAssertEqual(store.completedTodos[0].completedAt, baseDate)
-        XCTAssertEqual(store.collapsedNotchTitle, "牛!全干完了!")
-    }
-
-    func testDeleteDoesNotDeleteCompletedTodos() throws {
-        let store = try TodoStore(repository: InMemoryTodoRepository(), now: { self.baseDate })
-        try store.addTodo(title: "A")
-        let id = store.activeTodos[0].id
-        try store.completeTodo(id: id)
-
-        try store.deleteTodo(id: id)
-
-        XCTAssertEqual(store.completedTodos.count, 1)
-    }
-
-    func testEditTodoTrimsActiveTitleAndUpdatesTimestamp() throws {
-        let id = UUID()
-        let editedAt = baseDate.addingTimeInterval(10)
-        let item = makeTodo(id: id, title: "Original")
-        let store = try TodoStore(repository: InMemoryTodoRepository(items: [item]), now: { editedAt })
-
-        try store.editTodo(id: id, title: "  Changed  ")
-
-        XCTAssertEqual(store.activeTodos[0].title, "Changed")
-        XCTAssertEqual(store.activeTodos[0].updatedAt, editedAt)
-    }
-
-    func testDeleteTodoRemovesActiveTodo() throws {
-        let firstID = UUID()
-        let secondID = UUID()
-        let first = makeTodo(id: firstID, title: "A", sortOrder: 0)
-        let second = makeTodo(id: secondID, title: "B", sortOrder: 1)
-        let store = try TodoStore(repository: InMemoryTodoRepository(items: [first, second]), now: { self.baseDate })
-
-        try store.deleteTodo(id: firstID)
-
-        XCTAssertEqual(store.activeTodos.map(\.id), [secondID])
-        XCTAssertEqual(store.activeTodos.map(\.title), ["B"])
     }
 
     func testActiveTodosTieBreakEqualSortOrderByCreatedAtAscending() throws {
         let later = makeTodo(title: "Later", createdAt: baseDate.addingTimeInterval(10), sortOrder: 0)
         let earlier = makeTodo(title: "Earlier", createdAt: baseDate, sortOrder: 0)
-        let store = try TodoStore(repository: InMemoryTodoRepository(items: [later, earlier]), now: { self.baseDate })
+        let store = try TodoStore(repository: InMemoryTodoRepository(items: [later, earlier]))
 
         XCTAssertEqual(store.activeTodos.map(\.title), ["Earlier", "Later"])
     }
@@ -197,52 +173,40 @@ final class TodoStoreTests: XCTestCase {
             completedAt: baseDate.addingTimeInterval(10),
             sortOrder: 1
         )
-        let store = try TodoStore(repository: InMemoryTodoRepository(items: [older, newer]), now: { self.baseDate })
+        let store = try TodoStore(repository: InMemoryTodoRepository(items: [older, newer]))
 
         XCTAssertEqual(store.completedTodos.map(\.title), ["Newer", "Older"])
     }
 
-    func testEditTodoDoesNotEditCompletedItem() throws {
-        let id = UUID()
-        let completed = makeTodo(id: id, title: "Done", status: .completed, completedAt: baseDate)
-        let store = try TodoStore(repository: InMemoryTodoRepository(items: [completed]), now: { self.baseDate })
-
-        try store.editTodo(id: id, title: "Changed")
-
-        XCTAssertEqual(store.completedTodos[0].title, "Done")
-        XCTAssertEqual(store.completedTodos[0].updatedAt, baseDate)
-    }
-
-    func testStartTodoDoesNotStartCompletedItem() throws {
-        let id = UUID()
-        let completed = makeTodo(id: id, title: "Done", status: .completed, completedAt: baseDate)
-        let store = try TodoStore(repository: InMemoryTodoRepository(items: [completed]), now: { self.baseDate })
-
-        try store.startTodo(id: id)
-
-        XCTAssertEqual(store.completedTodos[0].status, .completed)
-        XCTAssertNil(store.doingTodo)
-        XCTAssertEqual(store.collapsedNotchTitle, "牛!全干完了!")
-    }
-
-    func testCompleteTodoDoesNotMutateCompletedItem() throws {
-        let id = UUID()
-        let completed = makeTodo(
-            id: id,
-            title: "Done",
-            status: .completed,
-            updatedAt: baseDate,
-            completedAt: baseDate
-        )
+    private func makeCloudStore(
+        initialTodos: [TodoItem] = [],
+        token: String? = "cloud-token",
+        client: FakeCloudTodoClient
+    ) throws -> (TodoStore, InMemoryTodoRepository, FakeCloudTodoClient) {
+        let repository = InMemoryTodoRepository(items: initialTodos)
         let store = try TodoStore(
-            repository: InMemoryTodoRepository(items: [completed]),
-            now: { self.baseDate.addingTimeInterval(10) }
+            repository: repository,
+            cloudTodoClient: client,
+            tokenProvider: { token }
         )
+        return (store, repository, client)
+    }
 
-        try store.completeTodo(id: id)
-
-        XCTAssertEqual(store.completedTodos[0].completedAt, baseDate)
-        XCTAssertEqual(store.completedTodos[0].updatedAt, baseDate)
+    private func makeSnapshot(items: [TodoItem], revision: Int = 1) -> CloudTodoSnapshot {
+        CloudTodoSnapshot(
+            revision: revision,
+            todos: items.map { item in
+                CloudTodo(
+                    id: item.id,
+                    title: item.title,
+                    status: item.status,
+                    createdAt: item.createdAt,
+                    updatedAt: item.updatedAt,
+                    completedAt: item.completedAt,
+                    sortOrder: item.sortOrder
+                )
+            }
+        )
     }
 
     private func makeTodo(
@@ -265,4 +229,65 @@ final class TodoStoreTests: XCTestCase {
             sortOrder: sortOrder
         )
     }
+}
+
+private enum CloudTodoCall: Equatable {
+    case get(token: String)
+    case add(title: String, token: String)
+    case edit(id: UUID, title: String, token: String)
+    case delete(id: UUID, token: String)
+    case start(id: UUID, token: String)
+    case pause(id: UUID, token: String)
+    case complete(id: UUID, token: String)
+}
+
+private final class FakeCloudTodoClient: CloudTodoClient {
+    var results: [Result<CloudTodoSnapshot, Error>] = []
+    private(set) var calls: [CloudTodoCall] = []
+
+    func getTodos(token: String) async throws -> CloudTodoSnapshot {
+        calls.append(.get(token: token))
+        return try nextResult()
+    }
+
+    func addTodo(title: String, token: String) async throws -> CloudTodoSnapshot {
+        calls.append(.add(title: title, token: token))
+        return try nextResult()
+    }
+
+    func editTodo(id: UUID, title: String, token: String) async throws -> CloudTodoSnapshot {
+        calls.append(.edit(id: id, title: title, token: token))
+        return try nextResult()
+    }
+
+    func deleteTodo(id: UUID, token: String) async throws -> CloudTodoSnapshot {
+        calls.append(.delete(id: id, token: token))
+        return try nextResult()
+    }
+
+    func startTodo(id: UUID, token: String) async throws -> CloudTodoSnapshot {
+        calls.append(.start(id: id, token: token))
+        return try nextResult()
+    }
+
+    func pauseTodo(id: UUID, token: String) async throws -> CloudTodoSnapshot {
+        calls.append(.pause(id: id, token: token))
+        return try nextResult()
+    }
+
+    func completeTodo(id: UUID, token: String) async throws -> CloudTodoSnapshot {
+        calls.append(.complete(id: id, token: token))
+        return try nextResult()
+    }
+
+    private func nextResult() throws -> CloudTodoSnapshot {
+        guard !results.isEmpty else {
+            throw TestCloudTodoError.unexpectedCall
+        }
+        return try results.removeFirst().get()
+    }
+}
+
+private enum TestCloudTodoError: Error {
+    case unexpectedCall
 }

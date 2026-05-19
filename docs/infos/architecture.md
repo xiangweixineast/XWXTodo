@@ -56,7 +56,9 @@ XWXTodoApp -> AppState -> CloudAuthStore + CloudAPIClient + SQLiteTodoRepository
 macOS 客户端业务依赖：
 
 ```text
-Views -> AppState / TodoStore -> TodoRepository -> SQLiteTodoRepository -> SQLite
+Views -> AppState / TodoStore
+TodoStore -> CloudTodoClient -> CloudAPIClient -> URLSession -> HTTPS API
+TodoStore -> TodoRepository -> SQLiteTodoRepository -> SQLite
 ```
 
 macOS 客户端云同步基础层：
@@ -92,10 +94,10 @@ python -m app.admin create-user <username> -> SQLAlchemy -> MySQL
 
 核心边界：
 
-- `TodoStore` 是 TODO 业务状态和操作入口。
+- `TodoStore` 是 TODO 业务状态、云端操作和本地快照入口。
 - SwiftUI 视图只调用 `TodoStore`，不直接访问持久化层。
-- `AppState` 协调云端登录状态和 TODO 快照缓存。
-- `TodoRepository` 隔离快照缓存接口，当前实现为 `SQLiteTodoRepository`。
+- `AppState` 协调云端登录状态、首次同步和运行中短轮询。
+- `TodoRepository` 隔离云端快照缓存接口，当前实现为 `SQLiteTodoRepository`。
 - `CloudAuthStore` 是客户端云端登录状态入口。
 - `CloudAPIClient` 封装云端认证和 TODO API。
 - `KeychainSessionStore` 只保存 bearer token。

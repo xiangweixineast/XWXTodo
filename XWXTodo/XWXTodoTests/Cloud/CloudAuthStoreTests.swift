@@ -347,23 +347,98 @@ final class AppStateCloudTodoSyncTests: XCTestCase {
         XCTAssertNil(appState.syncErrorMessage)
     }
 
+    func testPollingRefreshesTodosAfterLogin() async throws {
+        let initial = makeTodo(title: "Initial")
+        let polled = makeTodo(title: "Polled")
+        let authClient = FakeAuthClient()
+        let sessionStore = FakeSessionStore()
+        let todoClient = FakeTodoClient()
+        let pollingExpectation = expectation(description: "polling fetch")
+        authClient.loginResult = .success(makeSession(token: "new-token"))
+        todoClient.results = [
+            .success(makeSnapshot(items: [initial], revision: 1)),
+            .success(makeSnapshot(items: [polled], revision: 2)),
+        ]
+        todoClient.onGetTodos = { count in
+            if count == 2 {
+                pollingExpectation.fulfill()
+            }
+        }
+        let (appState, store, _) = try makeAppState(
+            authClient: authClient,
+            sessionStore: sessionStore,
+            todoClient: todoClient,
+            initialTodos: [],
+            todoPollingIntervalNanoseconds: 50_000_000
+        )
+
+        await appState.login(username: "alice", password: "secret")
+        await fulfillment(of: [pollingExpectation], timeout: 1.0)
+        try await Task.sleep(nanoseconds: 5_000_000)
+
+        XCTAssertEqual(todoClient.tokens, ["new-token", "new-token"])
+        XCTAssertEqual(store.activeTodos, [polled])
+        XCTAssertNil(appState.syncErrorMessage)
+    }
+
+    func testPollingFailureKeepsLastSuccessfulSnapshot() async throws {
+        let initial = makeTodo(title: "Initial")
+        let authClient = FakeAuthClient()
+        let sessionStore = FakeSessionStore()
+        let todoClient = FakeTodoClient()
+        let pollingExpectation = expectation(description: "polling failure")
+        authClient.loginResult = .success(makeSession(token: "new-token"))
+        todoClient.results = [
+            .success(makeSnapshot(items: [initial], revision: 1)),
+            .failure(CloudAPIError.transport("offline")),
+        ]
+        todoClient.onGetTodos = { count in
+            if count == 2 {
+                pollingExpectation.fulfill()
+            }
+        }
+        let (appState, store, repository) = try makeAppState(
+            authClient: authClient,
+            sessionStore: sessionStore,
+            todoClient: todoClient,
+            initialTodos: [],
+            todoPollingIntervalNanoseconds: 50_000_000
+        )
+
+        await appState.login(username: "alice", password: "secret")
+        await fulfillment(of: [pollingExpectation], timeout: 1.0)
+        try await Task.sleep(nanoseconds: 5_000_000)
+
+        XCTAssertEqual(todoClient.tokens, ["new-token", "new-token"])
+        XCTAssertEqual(store.activeTodos, [initial])
+        XCTAssertEqual(try repository.loadAll(), [initial])
+        XCTAssertEqual(appState.syncErrorMessage, "同步 TODO 失败：网络请求失败：offline")
+    }
+
     private func makeAppState(
         authClient: FakeAuthClient,
         sessionStore: FakeSessionStore,
         todoClient: FakeTodoClient,
-        initialTodos: [TodoItem]
+        initialTodos: [TodoItem],
+        todoPollingIntervalNanoseconds: UInt64 = 3_000_000_000
     ) throws -> (AppState, TodoStore, InMemoryTodoRepository) {
-        let repository = InMemoryTodoRepository(items: initialTodos)
-        let store = try TodoStore(repository: repository, now: { self.baseDate })
         let authStore = CloudAuthStore(
             client: authClient,
             sessionStore: sessionStore,
             now: { self.baseDate }
         )
+        let repository = InMemoryTodoRepository(items: initialTodos)
+        let store = try TodoStore(
+            repository: repository,
+            cloudTodoClient: todoClient,
+            tokenProvider: { authStore.session?.token },
+            now: { self.baseDate }
+        )
         let appState = AppState(
             store: store,
             cloudAuthStore: authStore,
-            cloudTodoClient: todoClient
+            cloudTodoClient: todoClient,
+            todoPollingIntervalNanoseconds: todoPollingIntervalNanoseconds
         )
         return (appState, store, repository)
     }
@@ -415,13 +490,39 @@ final class AppStateCloudTodoSyncTests: XCTestCase {
 
 private final class FakeTodoClient: CloudTodoClient {
     var results: [Result<CloudTodoSnapshot, Error>] = []
+    var onGetTodos: ((Int) -> Void)?
     private(set) var tokens: [String] = []
 
     func getTodos(token: String) async throws -> CloudTodoSnapshot {
         tokens.append(token)
+        onGetTodos?(tokens.count)
         guard !results.isEmpty else {
             throw TestError.unexpectedCall
         }
         return try results.removeFirst().get()
+    }
+
+    func addTodo(title: String, token: String) async throws -> CloudTodoSnapshot {
+        throw TestError.unexpectedCall
+    }
+
+    func editTodo(id: UUID, title: String, token: String) async throws -> CloudTodoSnapshot {
+        throw TestError.unexpectedCall
+    }
+
+    func deleteTodo(id: UUID, token: String) async throws -> CloudTodoSnapshot {
+        throw TestError.unexpectedCall
+    }
+
+    func startTodo(id: UUID, token: String) async throws -> CloudTodoSnapshot {
+        throw TestError.unexpectedCall
+    }
+
+    func pauseTodo(id: UUID, token: String) async throws -> CloudTodoSnapshot {
+        throw TestError.unexpectedCall
+    }
+
+    func completeTodo(id: UUID, token: String) async throws -> CloudTodoSnapshot {
+        throw TestError.unexpectedCall
     }
 }

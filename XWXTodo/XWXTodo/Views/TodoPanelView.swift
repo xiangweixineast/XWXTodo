@@ -7,6 +7,7 @@ struct TodoPanelView: View {
     @State private var newTitle = ""
     @State private var localError: String?
     @State private var isShowingCompleted = false
+    @State private var isPerformingAction = false
 
     var body: some View {
         VStack(spacing: 12) {
@@ -49,11 +50,13 @@ struct TodoPanelView: View {
                 .font(.system(size: 13))
                 .colorScheme(.light)
                 .foregroundStyle(.black)
+                .disabled(isPerformingAction)
                 .onSubmit(addTodo)
 
             Button("Add", action: addTodo)
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
+                .disabled(isAddDisabled)
         }
     }
 
@@ -75,29 +78,30 @@ struct TodoPanelView: View {
                         ForEach(store.activeTodos) { todo in
                             TodoRowView(
                                 todo: todo,
+                                isBusy: isPerformingAction,
                                 onStart: {
-                                    perform {
-                                        try store.startTodo(id: todo.id)
+                                    await perform {
+                                        try await store.startTodo(id: todo.id)
                                     }
                                 },
                                 onPause: {
-                                    perform {
-                                        try store.pauseTodo(id: todo.id)
+                                    await perform {
+                                        try await store.pauseTodo(id: todo.id)
                                     }
                                 },
                                 onDone: {
-                                    perform {
-                                        try store.completeTodo(id: todo.id)
+                                    await perform {
+                                        try await store.completeTodo(id: todo.id)
                                     }
                                 },
                                 onEdit: { title in
-                                    perform {
-                                        try store.editTodo(id: todo.id, title: title)
+                                    await perform {
+                                        try await store.editTodo(id: todo.id, title: title)
                                     }
                                 },
                                 onDelete: {
-                                    perform {
-                                        try store.deleteTodo(id: todo.id)
+                                    await perform {
+                                        try await store.deleteTodo(id: todo.id)
                                     }
                                 }
                             )
@@ -126,16 +130,34 @@ struct TodoPanelView: View {
     }
 
     private func addTodo() {
-        perform {
-            try store.addTodo(title: newTitle)
-            newTitle = ""
+        let title = newTitle
+        Task {
+            let didAdd = await perform {
+                try await store.addTodo(title: title)
+            }
+            if didAdd {
+                newTitle = ""
+            }
         }
     }
 
+    private var trimmedNewTitle: String {
+        newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var isAddDisabled: Bool {
+        isPerformingAction || trimmedNewTitle.isEmpty
+    }
+
     @discardableResult
-    private func perform(_ action: () throws -> Void) -> Bool {
+    private func perform(_ action: () async throws -> Void) async -> Bool {
+        guard !isPerformingAction else { return false }
+
+        isPerformingAction = true
+        defer { isPerformingAction = false }
+
         do {
-            try action()
+            try await action()
             localError = nil
             return true
         } catch {

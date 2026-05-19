@@ -129,6 +129,11 @@ final class CloudAuthStore: ObservableObject {
         }
     }
 
+    /// 服务端判定 token 失效时，清理本机会话并回到未登录状态。
+    func expireCurrentSession() {
+        handleExpiredToken()
+    }
+
     private func applyConnectedSession(_ session: CloudSession) {
         self.session = session
         self.currentToken = session.token

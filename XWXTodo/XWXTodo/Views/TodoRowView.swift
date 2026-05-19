@@ -2,24 +2,27 @@ import SwiftUI
 
 struct TodoRowView: View {
     let todo: TodoItem
-    let onStart: () -> Void
-    let onPause: () -> Void
-    let onDone: () -> Void
-    let onEdit: (String) -> Bool
-    let onDelete: () -> Void
+    let isBusy: Bool
+    let onStart: () async -> Void
+    let onPause: () async -> Void
+    let onDone: () async -> Void
+    let onEdit: (String) async -> Bool
+    let onDelete: () async -> Void
 
     @State private var isEditing = false
     @State private var draftTitle: String
 
     init(
         todo: TodoItem,
-        onStart: @escaping () -> Void,
-        onPause: @escaping () -> Void,
-        onDone: @escaping () -> Void,
-        onEdit: @escaping (String) -> Bool,
-        onDelete: @escaping () -> Void
+        isBusy: Bool,
+        onStart: @escaping () async -> Void,
+        onPause: @escaping () async -> Void,
+        onDone: @escaping () async -> Void,
+        onEdit: @escaping (String) async -> Bool,
+        onDelete: @escaping () async -> Void
     ) {
         self.todo = todo
+        self.isBusy = isBusy
         self.onStart = onStart
         self.onPause = onPause
         self.onDone = onDone
@@ -38,14 +41,16 @@ struct TodoRowView: View {
                     .font(.system(size: 13))
                     .colorScheme(.light)
                     .foregroundStyle(.black)
+                    .disabled(isBusy)
                     .onSubmit(saveEdit)
 
                 Button("Save", action: saveEdit)
                     .buttonStyle(.borderedProminent)
-                    .disabled(trimmedDraftTitle.isEmpty)
+                    .disabled(isBusy || trimmedDraftTitle.isEmpty)
 
                 Button("Cancel", action: cancelEdit)
                     .buttonStyle(.bordered)
+                    .disabled(isBusy)
             } else {
                 Text(todo.title)
                     .font(.system(size: 13, weight: todo.status == .doing ? .semibold : .regular))
@@ -55,25 +60,38 @@ struct TodoRowView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 if todo.status == .doing {
-                    Button("Pause", action: onPause)
+                    Button("Pause") {
+                        Task { await onPause() }
+                    }
                         .buttonStyle(.bordered)
+                        .disabled(isBusy)
                 } else {
-                    Button("Start", action: onStart)
+                    Button("Start") {
+                        Task { await onStart() }
+                    }
                         .buttonStyle(.bordered)
+                        .disabled(isBusy)
                 }
 
-                Button("Done", action: onDone)
+                Button("Done") {
+                    Task { await onDone() }
+                }
                     .buttonStyle(.borderedProminent)
+                    .disabled(isBusy)
 
                 Button("Edit") {
                     draftTitle = todo.title
                     isEditing = true
                 }
                 .buttonStyle(.bordered)
+                .disabled(isBusy)
 
-                Button("Delete", action: onDelete)
+                Button("Delete") {
+                    Task { await onDelete() }
+                }
                     .buttonStyle(.bordered)
                     .foregroundStyle(.red)
+                    .disabled(isBusy)
             }
         }
         .controlSize(.small)
@@ -107,11 +125,16 @@ struct TodoRowView: View {
     }
 
     private func saveEdit() {
+        guard !isBusy else { return }
         guard !trimmedDraftTitle.isEmpty else { return }
-        guard onEdit(trimmedDraftTitle) else { return }
 
-        draftTitle = trimmedDraftTitle
-        isEditing = false
+        let title = trimmedDraftTitle
+        Task {
+            guard await onEdit(title) else { return }
+
+            draftTitle = title
+            isEditing = false
+        }
     }
 
     private func cancelEdit() {
