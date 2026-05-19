@@ -66,6 +66,24 @@ final class SQLiteTodoRepository: TodoRepository {
         }
     }
 
+    func replaceAll(_ items: [TodoItem]) throws {
+        try execute("BEGIN IMMEDIATE;")
+        do {
+            try execute("DELETE FROM todos;")
+            for item in items {
+                try insert(item)
+            }
+            try execute("COMMIT;")
+        } catch {
+            try? execute("ROLLBACK;")
+            throw error
+        }
+    }
+
+    func clear() throws {
+        try execute("DELETE FROM todos;")
+    }
+
     func insert(_ item: TodoItem) throws {
         let sql = """
         INSERT INTO todos (id, title, status, created_at, updated_at, completed_at, sort_order)

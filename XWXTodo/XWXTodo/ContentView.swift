@@ -15,7 +15,8 @@ struct ContentView: View {
             Text("XWXTodo")
                 .font(.headline)
 
-            CloudAuthSectionView(authStore: appState.cloudAuthStore)
+            CloudAuthSectionView(appState: appState, authStore: appState.cloudAuthStore)
+            CloudTodoSyncSectionView(appState: appState)
 
             if let startupError = appState.startupError {
                 ErrorBannerView(title: "启动错误", message: startupError)
@@ -33,6 +34,7 @@ struct ContentView: View {
 }
 
 private struct CloudAuthSectionView: View {
+    @ObservedObject var appState: AppState
     @ObservedObject var authStore: CloudAuthStore
     @State private var username = ""
     @State private var password = ""
@@ -107,7 +109,7 @@ private struct CloudAuthSectionView: View {
 
             Button(role: .destructive) {
                 Task {
-                    await authStore.logout()
+                    await appState.logout()
                 }
             } label: {
                 Label("退出登录", systemImage: "rectangle.portrait.and.arrow.right")
@@ -125,7 +127,7 @@ private struct CloudAuthSectionView: View {
             HStack(spacing: 8) {
                 Button {
                     Task {
-                        await authStore.restoreSavedSession()
+                        await appState.restoreCloudSession()
                     }
                 } label: {
                     Label("重试", systemImage: "arrow.clockwise")
@@ -135,7 +137,7 @@ private struct CloudAuthSectionView: View {
 
                 Button(role: .destructive) {
                     Task {
-                        await authStore.logout()
+                        await appState.logout()
                     }
                 } label: {
                     Label("退出登录", systemImage: "rectangle.portrait.and.arrow.right")
@@ -165,9 +167,45 @@ private struct CloudAuthSectionView: View {
     private func signIn() {
         guard !isLoginDisabled else { return }
         Task {
-            await authStore.login(username: username, password: password)
+            await appState.login(username: username, password: password)
             if authStore.phase == .signedIn {
                 password = ""
+            }
+        }
+    }
+}
+
+private struct CloudTodoSyncSectionView: View {
+    @ObservedObject var appState: AppState
+
+    @ViewBuilder
+    var body: some View {
+        if appState.isSyncingTodos || appState.syncErrorMessage != nil {
+            VStack(alignment: .leading, spacing: 8) {
+                if appState.isSyncingTodos {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("正在同步 TODO")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if let message = appState.syncErrorMessage {
+                    ErrorBannerView(title: "云端同步", message: message)
+
+                    Button {
+                        Task {
+                            await appState.retryTodoSync()
+                        }
+                    } label: {
+                        Label("重试同步", systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .disabled(appState.isSyncingTodos)
+                }
             }
         }
     }

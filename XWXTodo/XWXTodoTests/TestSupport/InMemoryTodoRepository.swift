@@ -12,6 +12,14 @@ final class InMemoryTodoRepository: TodoRepository {
         items
     }
 
+    func replaceAll(_ items: [TodoItem]) throws {
+        self.items = items
+    }
+
+    func clear() throws {
+        items = []
+    }
+
     func insert(_ item: TodoItem) throws {
         items.append(item)
     }

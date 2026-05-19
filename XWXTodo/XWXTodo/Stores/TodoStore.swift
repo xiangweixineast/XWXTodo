@@ -9,11 +9,17 @@ final class TodoStore: ObservableObject {
     private let repository: TodoRepository
     private let now: () -> Date
 
-    init(repository: TodoRepository, now: @escaping () -> Date = Date.init) throws {
+    init(
+        repository: TodoRepository,
+        now: @escaping () -> Date = Date.init,
+        loadInitialData: Bool = true
+    ) throws {
         self.repository = repository
         self.now = now
         self.todos = []
-        try reload()
+        if loadInitialData {
+            try reload()
+        }
     }
 
     var activeTodos: [TodoItem] {
@@ -54,6 +60,28 @@ final class TodoStore: ObservableObject {
         do {
             todos = try repository.loadAll()
             errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+            throw error
+        }
+    }
+
+    /// 用云端快照整体替换本地缓存。
+    func replaceAll(_ items: [TodoItem]) throws {
+        do {
+            try repository.replaceAll(items)
+            try reload()
+        } catch {
+            errorMessage = error.localizedDescription
+            throw error
+        }
+    }
+
+    /// 清空云端快照缓存，避免展示旧账号或旧网络状态的数据。
+    func clear() throws {
+        do {
+            try repository.clear()
+            try reload()
         } catch {
             errorMessage = error.localizedDescription
             throw error

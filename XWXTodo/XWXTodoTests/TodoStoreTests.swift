@@ -43,6 +43,34 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertEqual(store.collapsedNotchTitle, "尚有2项待办事项")
     }
 
+    func testReplaceAllUpdatesTodosFromSnapshot() throws {
+        let old = makeTodo(title: "Old")
+        let snapshot = makeTodo(title: "Cloud", sortOrder: 3)
+        let store = try TodoStore(
+            repository: InMemoryTodoRepository(items: [old]),
+            now: { self.baseDate }
+        )
+
+        try store.replaceAll([snapshot])
+
+        XCTAssertEqual(store.activeTodos, [snapshot])
+    }
+
+    func testClearRemovesCachedTodos() throws {
+        let active = makeTodo(title: "A")
+        let completed = makeTodo(title: "Done", status: .completed, completedAt: baseDate)
+        let store = try TodoStore(
+            repository: InMemoryTodoRepository(items: [active, completed]),
+            now: { self.baseDate }
+        )
+
+        try store.clear()
+
+        XCTAssertTrue(store.activeTodos.isEmpty)
+        XCTAssertTrue(store.completedTodos.isEmpty)
+        XCTAssertEqual(store.collapsedNotchTitle, "牛!全干完了!")
+    }
+
     func testStartingTodoAllowsOnlyOneDoingItem() throws {
         let store = try TodoStore(repository: InMemoryTodoRepository(), now: { self.baseDate })
         try store.addTodo(title: "A")

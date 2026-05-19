@@ -13,6 +13,40 @@ final class SQLiteTodoRepositoryTests: XCTestCase {
         XCTAssertEqual(try repository.loadAll(), [])
     }
 
+    func testReplaceAllDeletesOldTodosAndPersistsSnapshot() throws {
+        let repository = try SQLiteTodoRepository(databaseURL: makeTemporaryDatabaseURL())
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        let old = TodoItem(id: UUID(), title: "Old", status: .pending, createdAt: date, updatedAt: date, completedAt: nil, sortOrder: 0)
+        let snapshot = TodoItem(id: UUID(), title: "Cloud", status: .doing, createdAt: date, updatedAt: date, completedAt: nil, sortOrder: 2)
+        try repository.insert(old)
+
+        try repository.replaceAll([snapshot])
+
+        XCTAssertEqual(try repository.loadAll(), [snapshot])
+    }
+
+    func testReplaceAllWithEmptySnapshotClearsTodos() throws {
+        let repository = try SQLiteTodoRepository(databaseURL: makeTemporaryDatabaseURL())
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        let item = TodoItem(id: UUID(), title: "A", status: .pending, createdAt: date, updatedAt: date, completedAt: nil, sortOrder: 0)
+        try repository.insert(item)
+
+        try repository.replaceAll([])
+
+        XCTAssertEqual(try repository.loadAll(), [])
+    }
+
+    func testClearRemovesAllTodos() throws {
+        let repository = try SQLiteTodoRepository(databaseURL: makeTemporaryDatabaseURL())
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        let item = TodoItem(id: UUID(), title: "A", status: .pending, createdAt: date, updatedAt: date, completedAt: nil, sortOrder: 0)
+        try repository.insert(item)
+
+        try repository.clear()
+
+        XCTAssertEqual(try repository.loadAll(), [])
+    }
+
     func testPersistsInsertedTodoAcrossRepositoryInstances() throws {
         let url = makeTemporaryDatabaseURL()
         let createdAt = Date(timeIntervalSince1970: 1_800_000_000)

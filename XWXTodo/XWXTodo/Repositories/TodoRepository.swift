@@ -2,6 +2,8 @@ import Foundation
 
 protocol TodoRepository {
     func loadAll() throws -> [TodoItem]
+    func replaceAll(_ items: [TodoItem]) throws
+    func clear() throws
     func insert(_ item: TodoItem) throws
     func update(_ item: TodoItem) throws
     func delete(id: UUID) throws
