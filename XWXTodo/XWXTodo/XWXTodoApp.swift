@@ -10,16 +10,20 @@ import SwiftUI
 @MainActor
 final class AppState: ObservableObject {
     let store: TodoStore?
+    let cloudAuthStore: CloudAuthStore
     private var overlayController: OverlayController?
     @Published var startupError: String?
 
-    init(store: TodoStore?, startupError: String? = nil) {
+    init(store: TodoStore?, startupError: String? = nil, cloudAuthStore: CloudAuthStore? = nil) {
         self.store = store
+        self.cloudAuthStore = cloudAuthStore ?? CloudAuthStore()
         self.overlayController = nil
         self.startupError = startupError
     }
 
     init() {
+        self.cloudAuthStore = CloudAuthStore()
+
         do {
             let repository = try SQLiteTodoRepository()
             let store = try TodoStore(repository: repository)
@@ -30,6 +34,10 @@ final class AppState: ObservableObject {
             self.overlayController = OverlayController(fallbackTitle: "XWXTodo")
             self.startupError = error.localizedDescription
         }
+    }
+
+    func restoreCloudSessionIfNeeded() async {
+        await cloudAuthStore.restoreSavedSessionIfNeeded()
     }
 
     func showOverlay() {
@@ -47,6 +55,9 @@ struct XWXTodoApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView(appState: appState)
+                .task {
+                    await appState.restoreCloudSessionIfNeeded()
+                }
                 .onAppear {
                     if scenePhase == .active {
                         appState.showOverlay()

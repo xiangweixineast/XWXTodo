@@ -30,6 +30,9 @@
 		A0C100000000000000000004 /* CloudSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XWXTodo/Cloud/CloudSessionStore.swift; sourceTree = "<group>"; };
 		A0C100000000000000000005 /* CloudAPIClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XWXTodoTests/Cloud/CloudAPIClientTests.swift; sourceTree = "<group>"; };
 		A0C100000000000000000006 /* KeychainSessionStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XWXTodoTests/Cloud/KeychainSessionStoreTests.swift; sourceTree = "<group>"; };
+		A0C100000000000000000007 /* CloudAuthClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XWXTodo/Cloud/CloudAuthClient.swift; sourceTree = "<group>"; };
+		A0C100000000000000000008 /* CloudAuthStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XWXTodo/Cloud/CloudAuthStore.swift; sourceTree = "<group>"; };
+		A0C100000000000000000009 /* CloudAuthStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XWXTodoTests/Cloud/CloudAuthStoreTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
