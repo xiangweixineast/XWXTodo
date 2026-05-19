@@ -1,7 +1,10 @@
+# 本地工具
 .superpowers/
 
+# macOS
 .DS_Store
 
+# Xcode / 构建产物
 DerivedData/
 .build/
 build/
@@ -10,11 +13,28 @@ dist/
 *.xcuserstate
 xcuserdata/
 
+# Python
 __pycache__/
 *.pyc
 .pytest_cache/
 .venv/
 
+# 本地环境变量
 .env
 .env.*
 !.env.example
+
+# 本地数据库
+*.db
+*.sqlite
+*.sqlite3
+
+# 证书私钥与签名文件
+*.key
+*.pem
+*.p12
+*.mobileprovision
+
+# 生产服务器私密信息
+docs/infos/服务器信息.md
+docs/服务器信息.md
