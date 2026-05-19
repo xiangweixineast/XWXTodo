@@ -1,5 +1,7 @@
 .superpowers/
+
 .DS_Store
+
 DerivedData/
 .build/
 build/
@@ -7,8 +9,12 @@ dist/
 *.xcarchive
 *.xcuserstate
 xcuserdata/
+
 __pycache__/
 *.pyc
 .pytest_cache/
-server/.env
-server/.venv/
+.venv/
+
+.env
+.env.*
+!.env.example
