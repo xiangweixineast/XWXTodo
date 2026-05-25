@@ -51,9 +51,9 @@ final class AppState: ObservableObject {
         self.isSyncingTodos = false
 
         do {
-            let repository = try SQLiteTodoRepository()
+            let cache = try SQLiteTodoSnapshotCache()
             let store = try TodoStore(
-                repository: repository,
+                cache: cache,
                 cloudTodoClient: cloudClient,
                 tokenProvider: { authStore.session?.token },
                 loadInitialData: false

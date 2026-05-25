@@ -1,5 +1,6 @@
 import Foundation
 
+/// SQLite 缓存层错误。
 enum SQLiteError: Error, LocalizedError {
     case openFailed(String)
     case prepareFailed(String)

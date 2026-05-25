@@ -1,7 +1,7 @@
 import Foundation
 import SQLite3
 
-final class SQLiteTodoRepository: TodoRepository {
+final class SQLiteTodoSnapshotCache: TodoSnapshotCache {
     private var database: OpaquePointer?
 
     convenience init() throws {
@@ -42,7 +42,7 @@ final class SQLiteTodoRepository: TodoRepository {
             .appendingPathComponent("xwxtodo.sqlite")
     }
 
-    func loadAll() throws -> [TodoItem] {
+    func loadTodos() throws -> [TodoItem] {
         let sql = """
         SELECT id, title, status, created_at, updated_at, completed_at, sort_order
         FROM todos
@@ -66,12 +66,12 @@ final class SQLiteTodoRepository: TodoRepository {
         }
     }
 
-    func replaceAll(_ items: [TodoItem]) throws {
+    func replaceTodos(with todos: [TodoItem]) throws {
         try execute("BEGIN IMMEDIATE;")
         do {
             try execute("DELETE FROM todos;")
-            for item in items {
-                try insert(item)
+            for todo in todos {
+                try insert(todo)
             }
             try execute("COMMIT;")
         } catch {
@@ -80,94 +80,17 @@ final class SQLiteTodoRepository: TodoRepository {
         }
     }
 
-    func clear() throws {
+    func clearTodos() throws {
         try execute("DELETE FROM todos;")
     }
 
-    func insert(_ item: TodoItem) throws {
+    private func insert(_ item: TodoItem) throws {
         let sql = """
         INSERT INTO todos (id, title, status, created_at, updated_at, completed_at, sort_order)
         VALUES (?, ?, ?, ?, ?, ?, ?);
         """
         try withPreparedStatement(sql) { statement in
             try bind(item, to: statement)
-            try stepDone(statement)
-        }
-    }
-
-    func update(_ item: TodoItem) throws {
-        let sql = """
-        UPDATE todos
-        SET title = ?, status = ?, created_at = ?, updated_at = ?, completed_at = ?, sort_order = ?
-        WHERE id = ?;
-        """
-        try withPreparedStatement(sql) { statement in
-            try bindText(item.title, to: statement, at: 1)
-            try bindText(item.status.rawValue, to: statement, at: 2)
-            try bindDate(item.createdAt, to: statement, at: 3)
-            try bindDate(item.updatedAt, to: statement, at: 4)
-            try bindOptionalDate(item.completedAt, to: statement, at: 5)
-            try bindInt(item.sortOrder, to: statement, at: 6)
-            try bindText(item.id.uuidString, to: statement, at: 7)
-            try stepDone(statement)
-        }
-    }
-
-    func delete(id: UUID) throws {
-        let sql = "DELETE FROM todos WHERE id = ? AND status <> 'completed';"
-        try withPreparedStatement(sql) { statement in
-            try bindText(id.uuidString, to: statement, at: 1)
-            try stepDone(statement)
-        }
-    }
-
-    func setDoing(id: UUID, updatedAt: Date) throws {
-        try execute("BEGIN IMMEDIATE;")
-        do {
-            try withPreparedStatement("UPDATE todos SET status = 'pending', updated_at = ? WHERE status = 'doing';") { statement in
-                try bindDate(updatedAt, to: statement, at: 1)
-                try stepDone(statement)
-            }
-
-            try withPreparedStatement("UPDATE todos SET status = 'doing', updated_at = ? WHERE id = ? AND status <> 'completed';") { statement in
-                try bindDate(updatedAt, to: statement, at: 1)
-                try bindText(id.uuidString, to: statement, at: 2)
-                try stepDone(statement)
-                guard sqlite3_changes(database) == 1 else {
-                    throw SQLiteError.stepFailed("无法开始不存在或已完成的待办事项")
-                }
-            }
-
-            try execute("COMMIT;")
-        } catch {
-            try? execute("ROLLBACK;")
-            throw error
-        }
-    }
-
-    func setPending(id: UUID, updatedAt: Date) throws {
-        let sql = """
-        UPDATE todos
-        SET status = 'pending', updated_at = ?
-        WHERE id = ? AND status = 'doing';
-        """
-        try withPreparedStatement(sql) { statement in
-            try bindDate(updatedAt, to: statement, at: 1)
-            try bindText(id.uuidString, to: statement, at: 2)
-            try stepDone(statement)
-        }
-    }
-
-    func complete(id: UUID, completedAt: Date) throws {
-        let sql = """
-        UPDATE todos
-        SET status = 'completed', completed_at = ?, updated_at = ?
-        WHERE id = ? AND status <> 'completed';
-        """
-        try withPreparedStatement(sql) { statement in
-            try bindDate(completedAt, to: statement, at: 1)
-            try bindDate(completedAt, to: statement, at: 2)
-            try bindText(id.uuidString, to: statement, at: 3)
             try stepDone(statement)
         }
     }

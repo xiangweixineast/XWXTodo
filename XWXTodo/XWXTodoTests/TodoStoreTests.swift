@@ -10,13 +10,13 @@ final class TodoStoreTests: XCTestCase {
         let cloudItem = makeTodo(title: "写规格", sortOrder: 3)
         let client = FakeCloudTodoClient()
         client.results = [.success(makeSnapshot(items: [cloudItem], revision: 2))]
-        let (store, repository, _) = try makeCloudStore(client: client)
+        let (store, cache, _) = try makeCloudStore(client: client)
 
         try await store.addTodo(title: "  写规格  ")
 
         XCTAssertEqual(client.calls, [.add(title: "写规格", token: token)])
         XCTAssertEqual(store.activeTodos, [cloudItem])
-        XCTAssertEqual(try repository.loadAll(), [cloudItem])
+        XCTAssertEqual(try cache.loadTodos(), [cloudItem])
         XCTAssertEqual(store.currentRevision, 2)
         XCTAssertEqual(store.collapsedNotchTitle, "尚有1项待办事项")
     }
@@ -24,19 +24,19 @@ final class TodoStoreTests: XCTestCase {
     func testAddTodoRejectsEmptyTitleWithoutCallingCloud() async throws {
         let existing = makeTodo(title: "Old")
         let client = FakeCloudTodoClient()
-        let (store, repository, _) = try makeCloudStore(initialTodos: [existing], client: client)
+        let (store, cache, _) = try makeCloudStore(initialTodos: [existing], client: client)
 
         try await store.addTodo(title: "   ")
 
         XCTAssertTrue(client.calls.isEmpty)
         XCTAssertEqual(store.activeTodos, [existing])
-        XCTAssertEqual(try repository.loadAll(), [existing])
+        XCTAssertEqual(try cache.loadTodos(), [existing])
     }
 
     func testTodoOperationWithoutTokenFailsAndDoesNotMutateLocalState() async throws {
         let existing = makeTodo(title: "Old")
         let client = FakeCloudTodoClient()
-        let (store, repository, _) = try makeCloudStore(initialTodos: [existing], token: nil, client: client)
+        let (store, cache, _) = try makeCloudStore(initialTodos: [existing], token: nil, client: client)
 
         do {
             try await store.addTodo(title: "New")
@@ -47,7 +47,7 @@ final class TodoStoreTests: XCTestCase {
 
         XCTAssertTrue(client.calls.isEmpty)
         XCTAssertEqual(store.activeTodos, [existing])
-        XCTAssertEqual(try repository.loadAll(), [existing])
+        XCTAssertEqual(try cache.loadTodos(), [existing])
         XCTAssertEqual(store.errorMessage, "请先登录云端账号")
     }
 
@@ -55,7 +55,7 @@ final class TodoStoreTests: XCTestCase {
         let existing = makeTodo(title: "Old")
         let client = FakeCloudTodoClient()
         client.results = [.failure(CloudAPIError.transport("offline"))]
-        let (store, repository, _) = try makeCloudStore(initialTodos: [existing], client: client)
+        let (store, cache, _) = try makeCloudStore(initialTodos: [existing], client: client)
 
         do {
             try await store.editTodo(id: existing.id, title: "Changed")
@@ -66,7 +66,7 @@ final class TodoStoreTests: XCTestCase {
 
         XCTAssertEqual(client.calls, [.edit(id: existing.id, title: "Changed", token: token)])
         XCTAssertEqual(store.activeTodos, [existing])
-        XCTAssertEqual(try repository.loadAll(), [existing])
+        XCTAssertEqual(try cache.loadTodos(), [existing])
         XCTAssertNil(store.currentRevision)
         XCTAssertEqual(store.errorMessage, "网络请求失败：offline")
     }
@@ -88,7 +88,7 @@ final class TodoStoreTests: XCTestCase {
             .success(makeSnapshot(items: [second], revision: 4)),
             .success(makeSnapshot(items: [completed], revision: 5)),
         ]
-        let (store, repository, _) = try makeCloudStore(initialTodos: [first], client: client)
+        let (store, cache, _) = try makeCloudStore(initialTodos: [first], client: client)
 
         try await store.editTodo(id: firstID, title: "  B  ")
         try await store.startTodo(id: firstID)
@@ -107,14 +107,14 @@ final class TodoStoreTests: XCTestCase {
             ]
         )
         XCTAssertEqual(store.completedTodos, [completed])
-        XCTAssertEqual(try repository.loadAll(), [completed])
+        XCTAssertEqual(try cache.loadTodos(), [completed])
         XCTAssertEqual(store.currentRevision, 5)
     }
 
     func testApplySnapshotIgnoresOlderRevision() throws {
         let newer = makeTodo(title: "Newer")
         let older = makeTodo(title: "Older")
-        let store = try TodoStore(repository: InMemoryTodoRepository())
+        let store = try TodoStore(cache: InMemoryTodoSnapshotCache())
 
         XCTAssertTrue(try store.applySnapshot(makeSnapshot(items: [newer], revision: 5)))
         XCTAssertFalse(try store.applySnapshot(makeSnapshot(items: [older], revision: 4)))
@@ -126,7 +126,7 @@ final class TodoStoreTests: XCTestCase {
     func testClearRemovesCachedTodosAndRevision() throws {
         let active = makeTodo(title: "A")
         let completed = makeTodo(title: "Done", status: .completed, completedAt: baseDate)
-        let store = try TodoStore(repository: InMemoryTodoRepository(items: [active, completed]))
+        let store = try TodoStore(cache: InMemoryTodoSnapshotCache(items: [active, completed]))
         try store.applySnapshot(makeSnapshot(items: [active, completed], revision: 8))
 
         try store.clear()
@@ -138,7 +138,7 @@ final class TodoStoreTests: XCTestCase {
     }
 
     func testCollapsedNotchTitleShowsDoneMessageWhenNoActiveTodos() throws {
-        let store = try TodoStore(repository: InMemoryTodoRepository())
+        let store = try TodoStore(cache: InMemoryTodoSnapshotCache())
 
         XCTAssertEqual(store.collapsedNotchTitle, "牛!全干完了!")
     }
@@ -147,7 +147,7 @@ final class TodoStoreTests: XCTestCase {
         let first = makeTodo(title: "A", sortOrder: 0)
         let second = makeTodo(title: "B", sortOrder: 1)
         let completed = makeTodo(title: "C", status: .completed, completedAt: baseDate, sortOrder: 2)
-        let store = try TodoStore(repository: InMemoryTodoRepository(items: [first, second, completed]))
+        let store = try TodoStore(cache: InMemoryTodoSnapshotCache(items: [first, second, completed]))
 
         XCTAssertEqual(store.collapsedNotchTitle, "尚有2项待办事项")
     }
@@ -155,7 +155,7 @@ final class TodoStoreTests: XCTestCase {
     func testActiveTodosTieBreakEqualSortOrderByCreatedAtAscending() throws {
         let later = makeTodo(title: "Later", createdAt: baseDate.addingTimeInterval(10), sortOrder: 0)
         let earlier = makeTodo(title: "Earlier", createdAt: baseDate, sortOrder: 0)
-        let store = try TodoStore(repository: InMemoryTodoRepository(items: [later, earlier]))
+        let store = try TodoStore(cache: InMemoryTodoSnapshotCache(items: [later, earlier]))
 
         XCTAssertEqual(store.activeTodos.map(\.title), ["Earlier", "Later"])
     }
@@ -173,7 +173,7 @@ final class TodoStoreTests: XCTestCase {
             completedAt: baseDate.addingTimeInterval(10),
             sortOrder: 1
         )
-        let store = try TodoStore(repository: InMemoryTodoRepository(items: [older, newer]))
+        let store = try TodoStore(cache: InMemoryTodoSnapshotCache(items: [older, newer]))
 
         XCTAssertEqual(store.completedTodos.map(\.title), ["Newer", "Older"])
     }
@@ -182,14 +182,14 @@ final class TodoStoreTests: XCTestCase {
         initialTodos: [TodoItem] = [],
         token: String? = "cloud-token",
         client: FakeCloudTodoClient
-    ) throws -> (TodoStore, InMemoryTodoRepository, FakeCloudTodoClient) {
-        let repository = InMemoryTodoRepository(items: initialTodos)
+    ) throws -> (TodoStore, InMemoryTodoSnapshotCache, FakeCloudTodoClient) {
+        let cache = InMemoryTodoSnapshotCache(items: initialTodos)
         let store = try TodoStore(
-            repository: repository,
+            cache: cache,
             cloudTodoClient: client,
             tokenProvider: { token }
         )
-        return (store, repository, client)
+        return (store, cache, client)
     }
 
     private func makeSnapshot(items: [TodoItem], revision: Int = 1) -> CloudTodoSnapshot {

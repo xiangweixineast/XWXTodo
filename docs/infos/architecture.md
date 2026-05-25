@@ -20,7 +20,7 @@ XWXTodo/
 │   │   ├── Models/
 │   │   ├── Cloud/
 │   │   ├── Stores/
-│   │   ├── Repositories/
+│   │   ├── Caches/
 │   │   ├── Overlay/
 │   │   └── Views/
 │   └── XWXTodoTests/
@@ -36,7 +36,7 @@ XWXTodo/
 | `XWXTodo/XWXTodo/Models/` | TODO 数据模型 |
 | `XWXTodo/XWXTodo/Cloud/` | 云端 API、DTO、认证状态和 Keychain 会话存储 |
 | `XWXTodo/XWXTodo/Stores/` | TODO 业务状态入口 |
-| `XWXTodo/XWXTodo/Repositories/` | 持久化协议和本地 SQLite 实现 |
+| `XWXTodo/XWXTodo/Caches/` | 云端 TODO 快照缓存协议和本地 SQLite 实现 |
 | `XWXTodo/XWXTodo/Overlay/` | AppKit 顶部覆盖层 |
 | `XWXTodo/XWXTodo/Views/` | SwiftUI 界面 |
 | `XWXTodo/XWXTodoTests/` | macOS 客户端测试 |
@@ -50,7 +50,7 @@ XWXTodo/
 macOS 客户端启动装配：
 
 ```text
-XWXTodoApp -> AppState -> CloudAuthStore + CloudAPIClient + SQLiteTodoRepository + TodoStore + OverlayController
+XWXTodoApp -> AppState -> CloudAuthStore + CloudAPIClient + SQLiteTodoSnapshotCache + TodoStore + OverlayController
 ```
 
 macOS 客户端业务依赖：
@@ -58,7 +58,7 @@ macOS 客户端业务依赖：
 ```text
 Views -> AppState / TodoStore
 TodoStore -> CloudTodoClient -> CloudAPIClient -> URLSession -> HTTPS API
-TodoStore -> TodoRepository -> SQLiteTodoRepository -> SQLite
+TodoStore -> TodoSnapshotCache -> SQLiteTodoSnapshotCache -> SQLite
 ```
 
 macOS 客户端云同步基础层：
@@ -97,7 +97,7 @@ python -m app.admin create-user <username> -> SQLAlchemy -> MySQL
 - `TodoStore` 是 TODO 业务状态、云端操作和本地快照入口。
 - SwiftUI 视图只调用 `TodoStore`，不直接访问持久化层。
 - `AppState` 协调云端登录状态、首次同步和运行中短轮询。
-- `TodoRepository` 隔离云端快照缓存接口，当前实现为 `SQLiteTodoRepository`。
+- `TodoSnapshotCache` 隔离云端 TODO 快照缓存接口，当前实现为 `SQLiteTodoSnapshotCache`。
 - `CloudAuthStore` 是客户端云端登录状态入口。
 - `CloudAPIClient` 封装云端认证和 TODO API。
 - `KeychainSessionStore` 只保存 bearer token。

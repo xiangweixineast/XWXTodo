@@ -18,18 +18,18 @@ final class TodoStore: ObservableObject {
     @Published private(set) var errorMessage: String?
     @Published private(set) var currentRevision: Int?
 
-    private let repository: TodoRepository
+    private let cache: TodoSnapshotCache
     private let cloudTodoClient: CloudTodoClient
     private let tokenProvider: () -> String?
 
     init(
-        repository: TodoRepository,
+        cache: TodoSnapshotCache,
         cloudTodoClient: CloudTodoClient = CloudAPIClient(),
         tokenProvider: @escaping () -> String? = { nil },
         now: @escaping () -> Date = Date.init,
         loadInitialData: Bool = true
     ) throws {
-        self.repository = repository
+        self.cache = cache
         self.cloudTodoClient = cloudTodoClient
         self.tokenProvider = tokenProvider
         self.todos = []
@@ -73,21 +73,10 @@ final class TodoStore: ObservableObject {
         return "牛!全干完了!"
     }
 
-    func reload() throws {
+    private func reload() throws {
         do {
-            todos = try repository.loadAll()
+            todos = try cache.loadTodos()
             errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
-            throw error
-        }
-    }
-
-    /// 用云端快照整体替换本地缓存，不更新云端 revision。
-    func replaceAll(_ items: [TodoItem]) throws {
-        do {
-            try repository.replaceAll(items)
-            try reload()
         } catch {
             errorMessage = error.localizedDescription
             throw error
@@ -103,7 +92,7 @@ final class TodoStore: ObservableObject {
         }
 
         do {
-            try repository.replaceAll(snapshot.todoItems())
+            try cache.replaceTodos(with: snapshot.todoItems())
             try reload()
             currentRevision = snapshot.revision
             errorMessage = nil
@@ -117,7 +106,7 @@ final class TodoStore: ObservableObject {
     /// 清空云端快照缓存，避免展示旧账号或旧网络状态的数据。
     func clear() throws {
         do {
-            try repository.clear()
+            try cache.clearTodos()
             try reload()
             currentRevision = nil
         } catch {
