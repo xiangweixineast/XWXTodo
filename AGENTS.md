@@ -72,3 +72,17 @@ rg --files
 ```bash
 rg "pattern"
 ```
+
+## Agent skills
+
+### Issue tracker
+
+Issues 和 PRD 使用本地 Markdown 管理，存放在 `.scratch/`。详见 `docs/agents/issue-tracker.md`。
+
+### Triage labels
+
+Triage 使用默认五状态标签。详见 `docs/agents/triage-labels.md`。
+
+### Domain docs
+
+本仓库使用 single-context 领域文档布局。详见 `docs/agents/domain.md`。
